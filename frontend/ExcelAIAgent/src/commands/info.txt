@@ -1,0 +1,15 @@
+Commands/ Folder - Ribbon Commands
+
+  Purpose: Quick actions triggered from Excel's ribbon buttons
+
+  Contents:
+  - commands.html - Simple HTML page for command execution
+  - commands.ts - Background functions that execute when ribbon buttons are clicked
+
+  Functionality:
+  - Quick actions: One-click functions without opening task pane
+  - Background processing: Functions that run and show notifications
+  - Currently: Shows a notification when executed
+  - Future use: Could trigger AI analysis, data cleaning, or import actions
+  - Loads when: User clicks action buttons in Excel ribbon
+  

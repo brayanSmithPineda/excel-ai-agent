@@ -15,7 +15,7 @@ import { makeStyles } from "@fluentui/react-components";
 import { 
   Brain24Regular,      // AI/intelligence icon for smart features
   Shield24Regular,     // Security icon for audit/governance features  
-  DatabaseArrow24Regular  // Data integration icon for business connections
+  DatabaseArrowUpRegular  // Data integration icon for business connections
 } from "@fluentui/react-icons";
 
 // Utility function import - handles inserting text into Excel cells
@@ -66,7 +66,7 @@ const App: React.FC<AppProps> = (props: AppProps) => {
     },
     {
       // Database arrow icon represents data integration capabilities
-      icon: <DatabaseArrow24Regular />,
+      icon: <DatabaseArrowUpRegular />,
       // Showcase the business tool integrations (Stripe, NetSuite, etc.)
       primaryText: "Direct integrations with business tools",
     },

@@ -1,0 +1,16 @@
+The taskpane folder is used to have the Task Pane UI
+
+Purpose: Main user interface that appears as a side panel in Excel
+
+  Contents:
+  - taskpane.html - HTML page that loads in Excel's task pane
+  - taskpane.ts - Excel-specific utilities (like insertText function)
+  - index.tsx - React app entry point
+  - components/ - React components (App, Header, HeroList, TextInsertion)
+
+  Functionality:
+  - Main UI: Where users interact with your AI assistant
+  - Chat interface: Where conversations with Claude will happen
+  - Data preview: Where users will see data before sending to AI
+  - Settings panel: Where users configure permissions and preferences
+  - Loads when: User clicks "Show Task Pane" button in Excel ribbon
