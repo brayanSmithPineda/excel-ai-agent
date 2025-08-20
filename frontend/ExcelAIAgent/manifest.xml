@@ -66,46 +66,34 @@
   <!-- This is required for our AI assistant to read data and make changes -->
   <Permissions>ReadWriteDocument</Permissions>
   
-  <!-- Office JavaScript API requirement sets specification -->
-  <!-- Defines the minimum API versions required for this AI assistant add-in to function -->
-  <!-- IMPORTANT: When adding new features, always verify the required API version at: -->
-  <!-- https://docs.microsoft.com/en-us/office/dev/add-ins/reference/requirement-sets/ -->
-  <Requirements>
-    <Sets DefaultMinVersion="1.1">
-      <!-- ExcelApi 1.3 - Core Excel functionality: worksheets, ranges, tables, data manipulation -->
-      <!-- Supports Office 2016 and later, Microsoft 365 -->
-      <Set Name="ExcelApi" MinVersion="1.3"/>
-      
-      <!-- IdentityApi 1.3 - Authentication and identity management for JWT auth with backend -->
-      <!-- Enables secure authentication flows and token management -->
-      <Set Name="IdentityApi" MinVersion="1.3"/>
-      
-      <!-- DialogApi 1.2 - Dialog boxes for authentication flows and user confirmations -->
-      <!-- Required for OAuth flows, data preview dialogs, and user consent -->
-      <Set Name="DialogApi" MinVersion="1.2"/>
-      
-      <!-- SharedRuntime 1.1 - Shared runtime for persistent state and WebSocket connections -->
-      <!-- Enables maintaining AI chat state and real-time backend communication -->
-      <Set Name="SharedRuntime" MinVersion="1.1"/>
-    </Sets>
-    
-    <!-- Individual API methods not covered by requirement sets -->
-    <!-- Used for specific functionality like settings storage and dialog management -->
-    <Methods>
-      <!-- Settings storage methods for user preferences and authentication tokens -->
-      <Method Name="Office.context.document.settings.saveAsync"/>
-      <Method Name="Office.context.document.settings.refreshAsync"/>
-      
-      <!-- Dialog management methods for authentication flows and user interactions -->
-      <Method Name="Office.context.ui.displayDialogAsync"/>
-      <Method Name="Office.context.ui.messageParent"/>
-    </Methods>
-  </Requirements>
   
   <!-- VersionOverrides section defines modern UI integration with Excel ribbon -->
   <!-- This replaces the basic DefaultSettings for newer Excel versions -->
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
-    
+    <!-- Office JavaScript API requirement sets specification -->
+  <!-- Defines the minimum API versions required for this AI assistant add-in to function -->
+  <!-- IMPORTANT: When adding new features, always verify the required API version at: -->
+  <!-- https://docs.microsoft.com/en-us/office/dev/add-ins/reference/requirement-sets/ -->
+    <Requirements>
+      <bt:Sets DefaultMinVersion="1.1">
+        <!-- ExcelApi 1.3 - Core Excel functionality: worksheets, ranges, tables, data manipulation -->
+        <!-- Supports Office 2016 and later, Microsoft 365 -->
+        <bt:Set Name="ExcelApi" MinVersion="1.3"/>
+        
+        <!-- IdentityApi 1.3 - Authentication and identity management for JWT auth with backend -->
+        <!-- Enables secure authentication flows and token management -->
+        <bt:Set Name="IdentityApi" MinVersion="1.3"/>
+        
+        <!-- DialogApi 1.2 - Dialog boxes for authentication flows and user confirmations -->
+        <!-- Required for OAuth flows, data preview dialogs, and user consent -->
+        <bt:Set Name="DialogApi" MinVersion="1.2"/>
+        
+        <!-- SharedRuntime 1.1 - Shared runtime for persistent state and WebSocket connections -->
+        <!-- Enables maintaining AI chat state and real-time backend communication -->
+        <bt:Set Name="SharedRuntime" MinVersion="1.1"/>
+      </bt:Sets>
+    </Requirements>
+  
     <!-- Host-specific configurations for different Office applications -->
     <Hosts>
       <!-- Configuration specific to Excel workbooks -->
