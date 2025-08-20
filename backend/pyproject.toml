@@ -1,0 +1,82 @@
+[project]
+name = "excel-ai-agent-backend"
+version = "0.1.0"
+description = "Secure FastAPI backend for Excel AI Agent"
+authors = [
+    {name = "Brayan Pineda",email = "pinedab606@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    #Core FastAPI
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0", #It takes HTTP requests from the outside world → passes them to your FastAPI app → returns responses.
+    # Database
+    "sqlalchemy>=2.0.23",
+    "alembic>=1.12.1",
+    "asyncpg>=0.29.0",        # PostgreSQL async driver
+    "aiosqlite>=0.19.0",      # SQLite async driver
+    # Authentication & Security
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.6",
+    # Azure AD integration
+    "azure-identity>=1.15.0",
+    "msal>=1.26.0",
+    # AI Integration
+    "anthropic>=0.8.0",
+    # Configuration & Environment
+    "pydantic[email]>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-dotenv>=1.0.0",
+    # HTTP & CORS
+    "httpx>=0.25.2",
+    # Utilities
+    "loguru>=0.7.2"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "httpx>=0.25.2",
+    "black>=23.11.0",
+    "isort>=5.12.0",
+    "mypy>=1.7.1",
+    "ruff>=0.1.6",
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "excel-ai-agent-backend"
+version = "0.1.0"
+description = "Secure FastAPI backend for Excel AI Agent"
+authors = ["Brayan Pineda <pinedab606@gmail.com>"]
+readme = "README.md"
+packages = [{include = "app"}]
+
+[tool.black]
+line-length = 88
+target-version = ['py313']
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "DJ", "EM", "EXE", "FA",
+"ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "INT", "ARG", "PTH", "ERA",
+"PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
+

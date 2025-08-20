@@ -56,10 +56,37 @@ Before building any component, feature, or integration, you MUST:
 
 This ensures our Excel AI Agent follows Microsoft's established patterns and provides the best possible user experience within the Office ecosystem.
 
+### Teaching & Learning Approach
+
+**MANDATORY: Use guided learning approach throughout the entire project**
+
+When working with the user, you MUST:
+
+1. **Step-by-Step Guidance**: Break down each task into small, manageable steps
+2. **Explain the "Why"**: Always explain WHY we're doing each step and WHY each dependency/approach is needed
+3. **Let User Write Code**: Provide the code structure/content, but let the user implement it themselves
+4. **Learning-Focused**: Ask the user to write the code following your guidance rather than using tools to write it directly
+5. **Progress Tracking**: Use TodoWrite tool to track progress and keep user informed
+6. **Explain Dependencies**: When adding packages, explain what each one does and why it's needed
+7. **Educational Comments**: Encourage the user to add educational comments to their code
+
+**Example Teaching Flow**:
+```
+✅ "Here's what we need to create and why..."
+✅ "You should write this code in file X because..."
+✅ "This dependency does Y and we need it for Z..."
+✅ "Try this step and let me know what happens..."
+❌ Direct tool usage without explanation
+❌ Writing code without letting user learn
+```
+
+This ensures the user learns every concept and can maintain/extend the codebase independently.
+
 ### While implementing
 - You should update the plan as you work.
 - After you complete tasks in the plan, you should update and append detailed descriptions of the changes you made, so following tasks can be easily hand over to other engineers.
 - Add comprehensive comments explaning every single line of code, import, and decision.
+- **Always use the guided teaching approach described above**
 
 ### Session Management Workflow
 **STARTING A NEW SESSION:**

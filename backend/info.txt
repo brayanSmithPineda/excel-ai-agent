@@ -1,0 +1,5 @@
+project structure. This is module-based (organized by functionality) rather than file-type based (all models
+   together, all services together).
+
+Why module-based? Because when you're working on authentication, all related files (models, services, schemas) are in one place. It scales
+better for complex applications.
