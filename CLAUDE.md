@@ -10,51 +10,79 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Don't over plan it, always think MVP.
 - Once you write the plan, firstly ask me to review it. Do not continue until I approve the plan.
 
-### Microsoft Standards Compliance
+### Documentation Standards Compliance
 
-**MANDATORY: Always consult Microsoft official documentation BEFORE implementing any feature**
+**MANDATORY: Always consult official documentation BEFORE implementing any feature**
 
 Before building any component, feature, or integration, you MUST:
 
-1. **Check Microsoft Official Docs First**: Always start by researching Microsoft's official documentation for the specific area you're working on:
+1. **Check Official Documentation First**: Always start by researching the official documentation for the specific technology/platform you're working on:
+
+#### **Frontend/Excel Add-in (Microsoft Docs Required)**
    - **Frontend/UI**: [Office Add-ins documentation](https://docs.microsoft.com/en-us/office/dev/add-ins/) and [Fluent UI React Components](https://react.fluentui.dev/) (Microsoft's recommended UI framework for Office applications)
    - **Excel Integration**: [Excel JavaScript API reference](https://docs.microsoft.com/en-us/javascript/api/excel)
    - **Office.js**: [Office JavaScript API documentation](https://docs.microsoft.com/en-us/office/dev/add-ins/reference/javascript-api-for-office)
    - **Manifest**: [Office Add-ins manifest documentation](https://docs.microsoft.com/en-us/office/dev/add-ins/develop/add-in-manifests)
    - **Authentication**: [Office Add-ins authentication patterns](https://docs.microsoft.com/en-us/office/dev/add-ins/develop/auth-overview)
 
-2. **Follow Microsoft Recommendations**: Use Microsoft's recommended tools, patterns, and best practices:
+#### **Backend/Database (Supabase Docs Required)**
+   - **Supabase Platform**: [Supabase documentation](https://supabase.com/docs) for all backend functionality
+   - **PostgreSQL**: [Supabase Database documentation](https://supabase.com/docs/guides/database) for database operations
+   - **Authentication**: [Supabase Auth documentation](https://supabase.com/docs/guides/auth) for user management
+   - **Row Level Security**: [Supabase RLS documentation](https://supabase.com/docs/guides/auth/row-level-security) for access controls
+   - **Real-time**: [Supabase Realtime documentation](https://supabase.com/docs/guides/realtime) for live updates
+   - **Edge Functions**: [Supabase Functions documentation](https://supabase.com/docs/guides/functions) for serverless logic
+
+2. **Follow Official Platform Recommendations**: Use the recommended tools, patterns, and best practices from each platform:
+
+#### **Microsoft Recommendations (Frontend)**:
    - **UI Framework**: Use Fluent UI React Components for consistent Office experience
    - **Development Tools**: Use Office Add-ins Yeoman generator and recommended project structure
    - **Design System**: Follow Fluent Design principles and Office design guidelines
    - **Performance**: Implement Microsoft's performance optimization recommendations
 
-3. **Document Compliance**: When implementing features, document:
-   - Which Microsoft documentation guided your implementation
-   - Why you followed specific Microsoft recommendations
-   - Any deviations from Microsoft standards (with justification)
+#### **Supabase Recommendations (Backend)**:
+   - **Database Design**: Use Supabase's recommended schema patterns and naming conventions
+   - **Security**: Implement Row Level Security (RLS) policies following Supabase best practices
+   - **Authentication**: Use Supabase Auth with JWT tokens for secure user management
+   - **Real-time**: Leverage Supabase Realtime for live updates instead of polling
+   - **Performance**: Follow Supabase performance optimization guidelines for PostgreSQL
 
-4. **Exception Process**: If you believe we should deviate from Microsoft recommendations:
-   - **Clearly state the Microsoft recommendation we're deviating from**
+3. **Document Compliance**: When implementing features, document:
+   - Which official documentation (Microsoft/Supabase) guided your implementation
+   - Why you followed specific platform recommendations
+   - Any deviations from official standards (with justification)
+
+4. **Exception Process**: If you believe we should deviate from official platform recommendations:
+   - **Clearly state the official recommendation we're deviating from**
    - **Provide specific technical reasons for the deviation**
    - **Document potential risks and mitigation strategies**
    - **Get explicit approval for the deviation**
 
-**Examples of Microsoft-First Approach:**
-- ✅ Using Fluent UI React Components for consistent Office UI experience
-- ✅ Following Office Add-ins manifest schema and best practices
-- ✅ Implementing Microsoft's recommended authentication patterns
-- ✅ Using Office.js APIs as documented in official Microsoft docs
+**Examples of Documentation-First Approach:**
+- ✅ Using Fluent UI React Components for consistent Office UI experience (Microsoft docs)
+- ✅ Following Office Add-ins manifest schema and best practices (Microsoft docs)
+- ✅ Implementing Supabase Row Level Security for data access control (Supabase docs)
+- ✅ Using Supabase Realtime for live updates instead of custom polling (Supabase docs)
 - ❌ Using a custom UI framework without checking Microsoft recommendations first
-- ❌ Implementing authentication patterns without consulting Office Add-ins auth docs
+- ❌ Implementing custom authentication without consulting Supabase Auth docs
 
-**Key Microsoft Documentation Resources:**
+**Key Documentation Resources:**
+
+#### **Microsoft Documentation:**
 - [Office Add-ins platform overview](https://docs.microsoft.com/en-us/office/dev/add-ins/overview/office-add-ins)
 - [Fluent UI React Components](https://react.fluentui.dev/)
 - [Office JavaScript API reference](https://docs.microsoft.com/en-us/javascript/api/overview/office)
 - [Office Add-ins best practices](https://docs.microsoft.com/en-us/office/dev/add-ins/concepts/add-in-development-best-practices)
 
-This ensures our Excel AI Agent follows Microsoft's established patterns and provides the best possible user experience within the Office ecosystem.
+#### **Supabase Documentation:**
+- [Supabase Getting Started](https://supabase.com/docs)
+- [Database Management](https://supabase.com/docs/guides/database)
+- [Authentication & Authorization](https://supabase.com/docs/guides/auth)
+- [Row Level Security](https://supabase.com/docs/guides/auth/row-level-security)
+- [Realtime Features](https://supabase.com/docs/guides/realtime)
+
+This ensures our Excel AI Agent follows both Microsoft's established patterns for Excel integration and Supabase's best practices for backend development, providing the best possible user experience and developer productivity.
 
 ### Teaching & Learning Approach
 
@@ -107,12 +135,13 @@ Excel AI Agent is a Microsoft Excel add-in that serves as a secure, auditable, a
 
 ## Architecture
 
-The project follows a client-server architecture:
+The project follows a modern client-server architecture with Supabase backend:
 
-- **Backend**: Python FastAPI application handling AI integration (Anthropic Claude), data processing, business tool integrations (Stripe, NetSuite, Notion, Metabase), security controls, and audit logging
+- **Backend**: Supabase PostgreSQL database with Row Level Security (RLS), Supabase Auth for user management, and Python FastAPI application for AI integration (Anthropic Claude), data processing, and business tool integrations (Stripe, NetSuite, Notion, Metabase)
+- **Database**: PostgreSQL via Supabase with built-in authentication, real-time subscriptions, and enterprise-grade security
 - **Frontend**: TypeScript/React Excel add-in using Office.js for Excel integration, providing chat interface, task panes, and data preview modals
-- **Communication**: REST API with JWT authentication between add-in and backend, WebSockets for real-time progress updates
-- **Security**: Granular access controls (row/column permissions), full audit logging, data preview before cloud transmission
+- **Communication**: REST API with JWT authentication between add-in and FastAPI, Supabase Realtime for live updates, WebSockets for real-time progress updates
+- **Security**: Supabase Row Level Security (RLS) for granular access controls, full audit logging, data preview before cloud transmission
 
 ## Office JavaScript API Requirements
 
@@ -200,13 +229,11 @@ poetry add --group dev package_name
 
 ## Key Requirements
 
-- Python >=3.13
-- Node.js (for Excel add-in development)
-- Poetry for Python package management
-- Office.js for Excel integration
-- React/TypeScript for frontend UI
-- PostgreSQL for production database
-- SQLite for development/testing
+- **Frontend**: Node.js, TypeScript/React, Office.js for Excel integration
+- **Backend**: Python >=3.13, FastAPI, Poetry for Python package management  
+- **Database**: PostgreSQL via Supabase (development and production)
+- **Platform**: Supabase account for database, authentication, and real-time features
+- **UI Framework**: Fluent UI React Components for Office experience
 
 ## Project Structure (Planned)
 

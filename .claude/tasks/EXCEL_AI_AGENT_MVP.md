@@ -32,52 +32,52 @@ Build a secure, auditable Excel AI Assistant add-in targeting finance teams with
 - Created package-documented.md for detailed dependency explanation
 - Successfully installed all npm dependencies (1204 packages)
 
-### Task 1.3: Python Backend Foundation
-**Goal**: Set up FastAPI backend with database and basic API structure
-**Reasoning**: FastAPI provides async support for handling multiple Excel requests and excellent API documentation.
+### Task 1.3: Supabase + FastAPI Backend Foundation
+**Goal**: Set up Supabase database and FastAPI backend with integration
+**Reasoning**: Supabase provides enterprise-grade PostgreSQL with built-in auth, real-time features, and FastAPI handles AI processing.
 
 **Implementation Steps**:
-1. Configure FastAPI project structure
-2. Set up SQLAlchemy with PostgreSQL/SQLite
-3. Create base models and database schema
-4. Configure environment variables and settings
-5. Set up basic health check endpoint
+1. Create Supabase project and configure PostgreSQL database
+2. Set up FastAPI with Supabase client integration  
+3. Create base models and database schema in Supabase
+4. Configure environment variables with Supabase credentials
+5. Set up basic health check endpoint with Supabase connection test
 
-**Dependencies**: FastAPI, SQLAlchemy, Alembic, Pydantic, python-dotenv
+**Dependencies**: FastAPI, Supabase Python client, Pydantic, python-dotenv
 
-### Task 1.4: Authentication System
-**Goal**: JWT-based auth between Excel add-in and backend
-**Reasoning**: JWT tokens allow stateless authentication suitable for Excel add-in architecture.
+### Task 1.4: Supabase Authentication System
+**Goal**: Secure authentication using Supabase Auth with JWT tokens
+**Reasoning**: Supabase Auth provides enterprise-grade authentication with built-in JWT handling, perfect for Excel add-in architecture.
 
 **Implementation Steps**:
-1. Install python-jose for JWT handling
-2. Create user model and authentication endpoints
-3. Implement JWT token generation/validation
-4. Add middleware for protected routes
-5. Test authentication flow
+1. Configure Supabase Auth settings and user management
+2. Create authentication endpoints using Supabase client
+3. Implement Supabase JWT token validation in FastAPI
+4. Add middleware for protected routes with Supabase auth
+5. Test authentication flow with Excel add-in
 
 ## Phase 2: Core Security & AI Features
 
-### Task 2.1: Access Control System
-**Goal**: Granular permissions for sheet/column access
-**Reasoning**: Enterprise security requirement - users should only access authorized data.
+### Task 2.1: Row Level Security (RLS) System
+**Goal**: Database-level granular permissions using Supabase RLS
+**Reasoning**: More secure than application-level permissions - enforced at database level.
 
 **Implementation Steps**:
-1. Create permission models (user, sheet, column permissions)
-2. Implement access control middleware
-3. Build permission checking utilities
+1. Create RLS policies in Supabase for user data isolation
+2. Implement sheet-level and column-level access controls via RLS
+3. Build RLS policy management utilities
 4. Create admin endpoints for permission management
 
-### Task 2.2: Audit Logging
-**Goal**: Comprehensive logging of all AI interactions
-**Reasoning**: Compliance requirement for enterprise finance teams.
+### Task 2.2: Supabase Audit Logging
+**Goal**: Comprehensive logging of all AI interactions using Supabase
+**Reasoning**: Compliance requirement for enterprise finance teams, leveraging Supabase's built-in features.
 
 **Implementation Steps**:
-1. Design audit log schema
-2. Create audit logging middleware
-3. Log all AI requests/responses
-4. Build audit query endpoints
-5. Add log retention policies
+1. Design audit log schema in Supabase with RLS policies
+2. Create audit logging middleware using Supabase client
+3. Log all AI requests/responses to Supabase tables
+4. Build audit query endpoints using Supabase queries
+5. Configure Supabase-based log retention policies
 
 ### Task 2.3: Claude AI Integration
 **Goal**: Integrate Anthropic Claude API for intelligent assistance

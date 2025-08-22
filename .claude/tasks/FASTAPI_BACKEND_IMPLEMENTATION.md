@@ -1,7 +1,7 @@
-# FastAPI Backend Implementation Plan - Excel AI Agent
+# FastAPI + Supabase Backend Implementation Plan - Excel AI Agent
 
 ## Overview
-Build a secure, enterprise-grade FastAPI backend for the Excel AI Agent with dual database support, Azure AD authentication, and Claude AI integration.
+Build a secure, enterprise-grade FastAPI backend for the Excel AI Agent with Supabase PostgreSQL database, Supabase Auth authentication, real-time features, and Claude AI integration.
 
 ## Phase 1: Foundation & Core Setup (Week 1)
 
@@ -125,16 +125,16 @@ mypy = "^1.7.1"
 ruff = "^0.1.6"
 ```
 
-### Task 1.2: Database Configuration
-**Goal**: Set up SQLAlchemy with dual database support (PostgreSQL + SQLite)
-**Reasoning**: Production needs PostgreSQL for performance, development uses SQLite for simplicity
+### Task 1.2: Supabase Setup & Configuration
+**Goal**: Set up Supabase project with PostgreSQL database and authentication
+**Reasoning**: Supabase provides enterprise-grade PostgreSQL with built-in auth, real-time features, and Row Level Security
 
 **Implementation Steps**:
-1. Create database configuration with async SQLAlchemy
-2. Set up connection pooling and session management
-3. Configure Alembic for database migrations
-4. Create base model with common fields (id, created_at, updated_at)
-5. Test database connections for both PostgreSQL and SQLite
+1. Create Supabase project and obtain connection credentials
+2. Set up Supabase client configuration in FastAPI
+3. Configure Row Level Security (RLS) policies for data access control
+4. Create base database schema with audit trails and user management
+5. Test Supabase connection and basic operations
 
 ### Task 1.3: Environment Configuration
 **Goal**: Secure environment variable management with Pydantic Settings
@@ -143,33 +143,33 @@ ruff = "^0.1.6"
 **Implementation Steps**:
 1. Create `Settings` class with `SecretStr` for sensitive data
 2. Configure environment-specific settings (dev, staging, prod)
-3. Add database URL configuration for dual database support
-4. Set up JWT secret and Azure AD configuration
-5. Create `.env.example` template
+3. Add Supabase URL and API key configuration
+4. Set up Supabase service role key for admin operations
+5. Create `.env.example` template with Supabase credentials
 
 ## Phase 2: Authentication & Security (Week 2)
 
-### Task 2.1: Azure AD Integration
-**Goal**: Microsoft 365 SSO authentication for Excel users
-**Reasoning**: Seamless authentication experience for Office users, enterprise security
+### Task 2.1: Supabase Authentication Integration
+**Goal**: Secure user authentication using Supabase Auth with JWT tokens
+**Reasoning**: Supabase Auth provides enterprise-grade authentication with built-in JWT handling and user management
 
 **Implementation Steps**:
-1. Configure Azure AD app registration
-2. Implement MSAL token validation
-3. Create user session management
-4. Add role-based access control
+1. Configure Supabase Auth settings and providers
+2. Implement Supabase JWT token validation in FastAPI
+3. Create user session management with Supabase
+4. Add role-based access control using Supabase Auth
 5. Test authentication flow with Excel add-in
 
-### Task 2.2: JWT Token System
-**Goal**: Stateless authentication for API requests
-**Reasoning**: Scalable authentication suitable for Excel add-in architecture
+### Task 2.2: Row Level Security (RLS) Implementation  
+**Goal**: Database-level access control using Supabase RLS policies
+**Reasoning**: More secure than application-level permissions, built into PostgreSQL
 
 **Implementation Steps**:
-1. Create JWT token generation and validation
-2. Implement refresh token mechanism
-3. Add token middleware for protected routes
-4. Create authentication dependencies
-5. Add logout and token revocation
+1. Create RLS policies for user data isolation
+2. Implement sheet-level and column-level access controls
+3. Add audit trail policies for compliance
+4. Create admin override policies for system operations
+5. Test RLS policies with different user roles
 
 ### Task 2.3: CORS Configuration for Excel
 **Goal**: Proper cross-origin configuration for Office add-ins
@@ -190,7 +190,8 @@ ALLOWED_HEADERS = [
     "Content-Type", 
     "X-Requested-With",
     "X-Office-Version",     # Office version headers
-    "X-Excel-SessionId"     # Excel session tracking
+    "X-Excel-SessionId",    # Excel session tracking
+    "apikey"               # Supabase API key header
 ]
 ```
 
@@ -207,27 +208,27 @@ ALLOWED_HEADERS = [
 4. Handle rate limiting and error recovery
 5. Add usage tracking and cost monitoring
 
-### Task 3.2: Audit Logging System
-**Goal**: Comprehensive logging of all AI interactions
-**Reasoning**: Compliance requirement for enterprise finance teams
+### Task 3.2: Audit Logging System with Supabase
+**Goal**: Comprehensive logging of all AI interactions using Supabase database
+**Reasoning**: Compliance requirement for enterprise finance teams, leveraging Supabase's built-in audit features
 
 **Implementation Steps**:
-1. Create audit log models and schemas
-2. Implement audit middleware for all requests
-3. Log AI prompts, responses, and user actions
-4. Add audit query endpoints for compliance
-5. Configure log retention and archival
+1. Create audit log tables in Supabase with RLS policies
+2. Implement audit middleware using Supabase client
+3. Log AI prompts, responses, and user actions to Supabase
+4. Add audit query endpoints using Supabase queries
+5. Configure Supabase-based log retention and archival
 
-### Task 3.3: Permission System
-**Goal**: Granular access controls at sheet/column level
-**Reasoning**: Enterprise security requirement - users should only access authorized data
+### Task 3.3: Supabase Realtime Integration
+**Goal**: Real-time updates for collaborative Excel features
+**Reasoning**: Enable live collaboration and instant AI response updates
 
 **Implementation Steps**:
-1. Create permission models (user, sheet, column permissions)
-2. Implement permission checking middleware
-3. Add admin endpoints for permission management
-4. Create permission inheritance system
-5. Test with different access scenarios
+1. Configure Supabase Realtime channels for AI conversations
+2. Implement real-time notifications for audit events
+3. Add live progress updates for long-running AI operations
+4. Create WebSocket integration with Excel SharedRuntime
+5. Test real-time features with multiple users
 
 ## Phase 4: API Endpoints & Integration (Week 4)
 
