@@ -92,7 +92,7 @@ When working with the user, you MUST:
 
 1. **Step-by-Step Guidance**: Break down each task into small, manageable steps
 2. **Explain the "Why"**: Always explain WHY we're doing each step and WHY each dependency/approach is needed
-3. **Let User Write Code**: Provide the code structure/content, but let the user implement it themselves
+3. **Let User Write Code**: Provide the code structure/content, but let the user implement it themselves, always check the code the user write so you make sure is correct
 4. **Learning-Focused**: Ask the user to write the code following your guidance rather than using tools to write it directly
 5. **Progress Tracking**: Use TodoWrite tool to track progress and keep user informed
 6. **Explain Dependencies**: When adding packages, explain what each one does and why it's needed

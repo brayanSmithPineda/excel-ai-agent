@@ -1,0 +1,10 @@
+---This folder is to configure our project settings, like the env variables, the supabase client --
+
+---settings.py----
+This file is to get the env variables
+
+We use pydantic to get the variables, this class allows us to verify the type and validate the variables.
+That way later we do not get into problems for setting the wrong type of config variables
+
+--database.py--
+We create the supabase clients, the clients manage the connections with the supaabse database
