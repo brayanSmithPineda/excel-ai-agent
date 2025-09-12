@@ -38,6 +38,7 @@ class JWTHandler:
                 token,
                 self.jwt_secret,
                 algorithms=[self.algorithm],
+                audience="authenticated",
                 options={
                     "verify_signature": True,
                     "verify_exp": True,

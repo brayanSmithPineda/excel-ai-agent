@@ -15,7 +15,7 @@ from fastapi import status
 # This tells FastAPI to look for Authorization header with Bearer token
 security = HTTPBearer()
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
     """
     Get the current authenticated user from the JWT token.
     Args:
@@ -34,7 +34,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     user_info = jwt_handler.extract_user_info(token)
     return user_info
 
-async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[Dict[str,Any]]:
+def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Optional[Dict[str,Any]]:
     """
     Similar to get_current_user, but returns None if no credentials are provided
     useful for public routes that work for both authenticated and unauthenticated users
@@ -42,7 +42,7 @@ async def get_current_user_optional(credentials: Optional[HTTPAuthorizationCrede
     if not credentials:
         return None
     try:
-        return await get_current_user(credentials)
+        return get_current_user(credentials)
     except HTTPException:
         return None
 

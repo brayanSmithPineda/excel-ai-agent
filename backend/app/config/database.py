@@ -22,6 +22,7 @@ class SupabaseManager:
                 supabase_key=settings.supabase_anon_key.get_secret_value(),
                 options=ClientOptions(
                     auto_refresh_token=True,
+                    persist_session=True,
                     #debug mode is used to print the requests and responses to the console
                     postgrest_client_timeout=60,
                     schema="public"

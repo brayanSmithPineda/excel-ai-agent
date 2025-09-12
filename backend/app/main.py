@@ -2,6 +2,10 @@ from fastapi import FastAPI #FastAPI is the web framework we are going to use to
 from fastapi.middleware.cors import CORSMiddleware #CORSMiddleware is a middleware that allows us to configure the CORS policy
 from app.config.settings import settings
 from app.config.database import get_supabase_health
+from app.auth.dependencies import get_current_user
+from typing import Dict, Any
+from fastapi import Depends
+from app.api.v1.auth import router as auth_router
 
 #Create the FastAPI app instance
 app = FastAPI(
@@ -20,6 +24,9 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+#Router Prefix
+app.include_router(auth_router, prefix = "/api/v1")
+
 #Basic healt check endpoint to test the API
 @app.get("/health")
 async def health_check():
@@ -36,3 +43,11 @@ async def supabase_health_check():
     """Check if the supabase connection is working"""
     health_status = await get_supabase_health()
     return health_status
+
+#test endpoint jwt
+@app.get("/test/jwt")
+def test_jwt(current_user: Dict[str, Any] = Depends(get_current_user)):
+    return {
+        "message": "JWT test endpoint",
+        "user": current_user
+    }
