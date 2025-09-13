@@ -82,7 +82,15 @@ Before building any component, feature, or integration, you MUST:
 - [Row Level Security](https://supabase.com/docs/guides/auth/row-level-security)
 - [Realtime Features](https://supabase.com/docs/guides/realtime)
 
-This ensures our Excel AI Agent follows both Microsoft's established patterns for Excel integration and Supabase's best practices for backend development, providing the best possible user experience and developer productivity.
+#### **Google Gemini AI Documentation:**
+- [Gemini API Documentation](https://ai.google.dev/gemini-api/docs) - Primary API reference and integration guide
+- [Gemini API Quickstart](https://ai.google.dev/gemini-api/docs/quickstart) - Getting started with authentication and first requests
+- [Gemini Models Overview](https://ai.google.dev/gemini-api/docs/models/gemini) - Available models (1.5 Flash, 1.5 Pro) and capabilities
+- [Gemini API Pricing](https://ai.google.dev/pricing) - Cost structure and free tier limits (1,500 requests/day)
+- [Best Practices](https://ai.google.dev/gemini-api/docs/text-generation) - Prompt engineering and optimization for cost efficiency
+- [Google GenAI Python SDK](https://googleapis.github.io/python-genai/) - Official Python SDK documentation and examples
+
+This ensures our Excel AI Agent follows Microsoft's established patterns for Excel integration, Supabase's best practices for backend development, and Google's recommended patterns for AI integration, providing cost-effective AI capabilities with professional user experience.
 
 ### Teaching & Learning Approach
 
@@ -116,18 +124,50 @@ This ensures the user learns every concept and can maintain/extend the codebase 
 - Add comprehensive comments explaning every single line of code, import, and decision.
 - **Always use the guided teaching approach described above**
 
+### Documentation Navigation System
+
+**UNIFIED FILE HIERARCHY** - All .md files use consistent PHASE.TASK numbering (1.1, 1.2, 2.1, etc.)
+
+**📊 SESSION_STATE.md** - **PRIMARY STATUS FILE** (Single Source of Truth)
+- Current session progress and what was completed today
+- Immediate next 2-3 tasks with priority order
+- Working commands, URLs, and development setup
+- **ALWAYS check this file first** to understand current position
+
+**🗺️ .claude/tasks/EXCEL_AI_AGENT_MVP.md** - **PROJECT ROADMAP**
+- High-level project phases and milestones (Phase 1, 2, 3, 4)
+- Long-term vision and success criteria
+- Dependencies between tasks and phases
+- Risk mitigation strategies
+
+**🔧 .claude/tasks/FASTAPI_BACKEND_IMPLEMENTATION.md** - **BACKEND TECHNICAL GUIDE**
+- Detailed technical implementation steps
+- Database schema and architecture decisions
+- Code examples and configuration details
+
+**🔐 .claude/tasks/SUPABASE_AUTHENTICATION_IMPLEMENTATION.md** - **AUTH REFERENCE**
+- Authentication system implementation details (now completed)
+- Security patterns and best practices
+
+**NAVIGATION RULES:**
+- Each file cross-references others for easy navigation
+- All files agree on current status and next tasks
+- Phase.Task numbering is consistent across all files
+- SESSION_STATE.md is the definitive "what's next" reference
+
 ### Session Management Workflow
 **STARTING A NEW SESSION:**
-1. Read .claude/SESSION_STATE.md to understand current progress
-2. Read .claude/ANALYSIS_GUIDE.md if analyzing existing code
-3. Check .claude/tasks/*.md files for implementation plans
+1. **Read .claude/SESSION_STATE.md first** to understand current progress and immediate next tasks
+2. Check referenced implementation files for technical details  
+3. Use unified PHASE.TASK numbering to track progress
 4. Continue where previous session left off
 
 **ENDING A SESSION:**
-1. Update .claude/SESSION_STATE.md with current progress
-2. Update implementation plans with completed tasks
-3. Note any important findings or blockers
-4. Ensure all code has comprehensive comments
+1. **Update .claude/SESSION_STATE.md** with current progress
+2. Update relevant implementation plans with completed tasks
+3. Ensure all files remain synchronized with same task numbering
+4. Note any important findings or blockers
+5. Ensure all code has comprehensive comments
 
 ## Project Overview
 

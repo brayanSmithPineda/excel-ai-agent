@@ -1,7 +1,10 @@
-# FastAPI + Supabase Backend Implementation Plan - Excel AI Agent
+# FastAPI + Supabase Backend - Technical Implementation Plan
+*📅 Last Updated: December 9, 2025*
 
-## Overview
-Build a secure, enterprise-grade FastAPI backend for the Excel AI Agent with Supabase PostgreSQL database, Supabase Auth authentication, real-time features, and Claude AI integration.
+> **🔧 TECHNICAL IMPLEMENTATION GUIDE**: This file provides detailed technical implementation steps for backend development. For current status, see [SESSION_STATE.md](../SESSION_STATE.md). For project roadmap, see [EXCEL_AI_AGENT_MVP.md](EXCEL_AI_AGENT_MVP.md).
+
+## Overview  
+Technical implementation guide for building the secure FastAPI backend with Supabase integration, using the unified PHASE.TASK numbering system.
 
 ## 🗄️ DATABASE DESIGN & ARCHITECTURE
 
@@ -209,9 +212,11 @@ VALUES (auth.uid(), 'excel_upload', 'excel_sheet', $excel_sheet_id, '{"size": "1
 
 This database design provides **enterprise-grade security**, **audit compliance**, **scalable performance**, and **clean data relationships** for the Excel AI Agent platform.
 
-## Phase 1: Foundation & Core Setup (Week 1)
+## ✅ PHASE 1: FOUNDATION (COMPLETED)
 
-### Task 1.1: Project Structure & Poetry Setup ✅ COMPLETED
+> 📊 **Status**: All Phase 1 tasks completed. This section provides detailed technical implementation notes for reference.
+
+### **1.1: Project Structure & Poetry Setup** ✅ COMPLETED
 **Goal**: Create enterprise-grade Python project structure with Poetry dependency management
 **Reasoning**: Proper project organization from the start prevents technical debt and ensures maintainability
 
@@ -370,143 +375,139 @@ ruff = "^0.1.6"
 - ✅ Fixed Supabase client `ClientOptions` parameters
 - ✅ Resolved database query permissions for health checks
 
-## Phase 2: Authentication & Security (Week 2)
+## 🔄 PHASE 2: CORE FEATURES (IN PROGRESS)
 
-### Task 2.1: Supabase Authentication Integration
-**Goal**: Secure user authentication using Supabase Auth with JWT tokens
-**Reasoning**: Supabase Auth provides enterprise-grade authentication with built-in JWT handling and user management
+> 🎯 **Current Status**: 2.1 & 2.2 foundation complete, implementing 2.3 (Claude AI Integration).
+
+### **2.1: Row Level Security (RLS) Implementation** ✅ **FOUNDATION COMPLETE**
+**Goal**: Database-level access control using Supabase RLS policies  
+**Status**: ✅ Basic RLS policies implemented in Supabase database schema (lines 31-101)
+**Result**: User isolation, admin override, and audit integrity enforced at PostgreSQL level
+
+**Implemented RLS Policies**:
+- ✅ Users can only access their own data (`auth.uid() = user_id`)
+- ✅ Admin override for super_admin role access to audit logs
+- ✅ Audit log integrity (no modifications allowed)
+- ✅ Foreign key cascade policies for data consistency
+
+### **2.2: Audit Logging System** ✅ **FOUNDATION COMPLETE**
+**Goal**: Comprehensive logging infrastructure for AI interactions  
+**Status**: ✅ `audit_logs` table implemented with proper schema and RLS policies (lines 80-101)
+**Result**: Ready to capture AI interactions via FastAPI middleware
+
+**Implemented Infrastructure**:
+- ✅ Comprehensive audit schema (user_id, action, resource_type, details, IP, user_agent)
+- ✅ RLS policies for secure audit access
+- ✅ System can insert, users can view own logs, admins can view all
+
+### **2.3: Gemini AI Integration** 🎯 **CURRENT TASK**
+**Goal**: Integrate Google Gemini API for intelligent Excel assistance  
+**Reasoning**: Cost-effective AI solution with free tier for development, excellent for Excel/data tasks
+**Dependencies**: ✅ Authentication system, ✅ Audit logging foundation
 
 **Implementation Steps**:
-1. Configure Supabase Auth settings and providers
-2. Implement Supabase JWT token validation in FastAPI
-3. Create user session management with Supabase
-4. Add role-based access control using Supabase Auth
+1. Install google-generativeai SDK and create Gemini service wrapper
+2. Implement conversation context management with Supabase storage
+3. Add prompt engineering for Excel-specific tasks (data analysis, cleaning)
+4. Handle free tier rate limiting (1,500 requests/day) and quota management
+5. Add usage tracking for future billing and cost monitoring per user
+
+### **2.4: Data Cleaning Engine**
+**Goal**: Automated data cleaning algorithms for Excel data
+**Reasoning**: Finance teams spend significant time on data preparation  
+**Dependencies**: Claude AI integration for intelligent cleaning suggestions
+
+**Implementation Steps**:
+1. Duplicate detection algorithms with configurable thresholds
+2. Data type inference and conversion utilities
+3. Missing value handling strategies (interpolation, defaults)
+4. Format standardization utilities (dates, currencies, numbers)
+5. Integration with pandas for efficient data processing
+
+## 📋 PHASE 3: INTEGRATION (UPCOMING)
+
+### **3.1: Excel Add-in Authentication Integration**
+**Goal**: Connect Excel add-in frontend to our authentication system  
+**Dependencies**: ✅ Phase 1 auth system, Phase 2 core features
+
+**Implementation Steps**:
+1. Integrate Supabase Auth SDK in Excel add-in frontend
+2. Implement secure token storage using Office.context.document.settings
+3. Create authentication UI components (login/logout forms)
+4. Handle token refresh flow in Excel add-in context
 5. Test authentication flow with Excel add-in
 
-### Task 2.2: Row Level Security (RLS) Implementation  
-**Goal**: Database-level access control using Supabase RLS policies
-**Reasoning**: More secure than application-level permissions, built into PostgreSQL
+### **3.2: Frontend UI Components (Task Pane & Chat Interface)**
+**Goal**: React-based task pane with chat interface
+**Dependencies**: Authentication integration, Claude AI endpoints
 
 **Implementation Steps**:
-1. Create RLS policies for user data isolation
-2. Implement sheet-level and column-level access controls
-3. Add audit trail policies for compliance
-4. Create admin override policies for system operations
-5. Test RLS policies with different user roles
+1. Design task pane layout with Fluent UI React components
+2. Implement chat interface with message history
+3. Add settings panel for permissions and preferences
+4. Create progress indicators for long-running AI operations
+5. Style components following Office design guidelines
 
-### Task 2.3: CORS Configuration for Excel
-**Goal**: Proper cross-origin configuration for Office add-ins
-**Reasoning**: Excel add-ins have specific CORS requirements that must be met
-
-**Critical CORS Requirements**:
-```python
-ALLOWED_ORIGINS = [
-    "https://excel.office.com",           # Excel on the web
-    "https://excel.officeapps.live.com",  # Excel online
-    "https://localhost:3000",             # Development (HTTPS only)
-    "https://127.0.0.1:3000"             # Alternative localhost
-]
-
-ALLOWED_METHODS = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-ALLOWED_HEADERS = [
-    "Authorization",
-    "Content-Type", 
-    "X-Requested-With",
-    "X-Office-Version",     # Office version headers
-    "X-Excel-SessionId",    # Excel session tracking
-    "apikey"               # Supabase API key header
-]
-```
-
-## Phase 3: AI Integration & Business Logic (Week 3)
-
-### Task 3.1: Claude AI Service
-**Goal**: Anthropic Claude integration for intelligent Excel assistance
-**Reasoning**: Claude excels at data analysis and structured tasks perfect for finance use cases
+### **3.3: Data Preview System**
+**Goal**: Preview data before cloud transmission
+**Dependencies**: UI components, data cleaning engine
 
 **Implementation Steps**:
-1. Create AI service wrapper for Anthropic SDK
-2. Implement conversation context management
-3. Add prompt engineering for Excel-specific tasks
-4. Handle rate limiting and error recovery
-5. Add usage tracking and cost monitoring
+1. Build data extraction from Excel ranges using Office.js
+2. Create preview modal components with data masking options
+3. Implement user confirmation flow for data transmission
+4. Add data sanitization and filtering capabilities
+5. Store user preview preferences securely
 
-### Task 3.2: Audit Logging System with Supabase
-**Goal**: Comprehensive logging of all AI interactions using Supabase database
-**Reasoning**: Compliance requirement for enterprise finance teams, leveraging Supabase's built-in audit features
+## 🚀 PHASE 4: PRODUCTION (FINAL)
 
-**Implementation Steps**:
-1. Create audit log tables in Supabase with RLS policies
-2. Implement audit middleware using Supabase client
-3. Log AI prompts, responses, and user actions to Supabase
-4. Add audit query endpoints using Supabase queries
-5. Configure Supabase-based log retention and archival
-
-### Task 3.3: Supabase Realtime Integration
-**Goal**: Real-time updates for collaborative Excel features
-**Reasoning**: Enable live collaboration and instant AI response updates
+### **4.1: Email Confirmation Flow**
+**Goal**: Re-enable email confirmation for production security
+**Dependencies**: All core features completed
 
 **Implementation Steps**:
-1. Configure Supabase Realtime channels for AI conversations
-2. Implement real-time notifications for audit events
-3. Add live progress updates for long-running AI operations
-4. Create WebSocket integration with Excel SharedRuntime
-5. Test real-time features with multiple users
+1. Configure Supabase Auth email confirmation settings
+2. Create email verification flow in Excel add-in
+3. Handle email confirmation callbacks securely
+4. Test email delivery and verification process
+5. Add resend verification functionality
 
-## Phase 4: API Endpoints & Integration (Week 4)
-
-### Task 4.1: Core API Endpoints
-**Goal**: REST API for Excel add-in communication
-**Reasoning**: Clean API interface for frontend integration
+### **4.2: Testing Framework & Deployment**
+**Goal**: Comprehensive testing and production deployment
+**Dependencies**: All integration features completed
 
 **Implementation Steps**:
-1. Health check and system status endpoints
-2. User authentication and profile endpoints
-3. AI chat and conversation endpoints
-4. Permission management endpoints
-5. Audit log query endpoints
+1. Set up pytest with test database for backend testing
+2. Create integration tests for all API endpoints
+3. Implement Excel add-in testing with Office.js test framework
+4. Configure CI/CD pipeline for automated testing
+5. Set up production deployment with Docker containerization
 
-### Task 4.2: Excel Data Processing
-**Goal**: Handle Excel data import and processing
-**Reasoning**: Core functionality for data cleaning and AI analysis
-
-**Implementation Steps**:
-1. Excel range data parsing
-2. Data validation and sanitization
-3. Preview system before AI processing
-4. Batch processing for large datasets
-5. Error handling and user feedback
-
-### Task 4.3: WebSocket Support (Optional)
-**Goal**: Real-time communication for long-running tasks
-**Reasoning**: Better user experience for AI processing that takes time
+### **4.3: Performance Optimization**
+**Goal**: Optimize for large Excel files and high user load
+**Dependencies**: Full system implemented and tested
 
 **Implementation Steps**:
-1. Add WebSocket support to FastAPI
-2. Implement connection management
-3. Real-time progress updates
-4. Connection cleanup and error handling
-5. Integration with Excel SharedRuntime
+1. Implement database connection pooling optimization
+2. Add caching layer for frequent API calls
+3. Optimize Claude AI request batching and rate limiting
+4. Configure load balancing for high availability
+5. Performance testing with realistic data volumes
 
-## Week 5: Testing & Deployment Preparation
+### **4.4: Security Hardening & Compliance**
+**Goal**: Enterprise-grade security and audit compliance
+**Dependencies**: All features implemented and tested
 
-### Task 5.1: Comprehensive Testing
-**Goal**: Full test coverage for reliability
 **Implementation Steps**:
-1. Unit tests for all services and utilities
-2. Integration tests for API endpoints
-3. Authentication flow testing
-4. Database migration testing
-5. Load testing for AI endpoints
+1. Implement comprehensive security headers and CORS policies
+2. Add rate limiting and DDoS protection
+3. Configure audit logging for compliance (SOC 2, GDPR)
+4. Security penetration testing and vulnerability assessment
+5. Documentation for enterprise security reviews
 
-### Task 5.2: Production Configuration
-**Goal**: Production-ready deployment setup
-**Implementation Steps**:
-1. Docker containerization
-2. Production environment configuration
-3. Database connection pooling optimization
-4. Logging and monitoring setup
-5. Security hardening checklist
+---
+
+> 📊 **Implementation Status**: This file provides detailed technical steps. For current progress, see [SESSION_STATE.md](../SESSION_STATE.md)
 
 ## Security Considerations
 

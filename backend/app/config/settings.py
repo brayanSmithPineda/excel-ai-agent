@@ -30,7 +30,7 @@ class Settings(BaseSettings): #BaseSettings is a class that provides the basic f
     access_token_expire_minutes: int = 60
 
     #AI Configuration
-    anthropic_api_key: Optional[SecretStr] = None
+    gemini_api_key: Optional[SecretStr] = None
 
     #CORS Configuration for Excel Add-In, origins that can communicate with the API
     allowed_origins: List[str] = [
