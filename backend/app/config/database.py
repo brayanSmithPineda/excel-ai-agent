@@ -15,7 +15,13 @@ class SupabaseManager:
     @property #This is a property decorator, it is used to define a property method, a property method is a method that is accessed like an attribute
     #for example, we can access the client as a attribute, like supabase.client, instead of calling a method like supabase.client()
     def client(self) -> Client:
-        """Get the user-level supabase client. Respects RLS policies. Uses anon key"""
+        """
+        Get the user-level supabase client. Respects RLS policies. Uses anon key
+        This client uses the anon key (anonymous user), which means the auth.uid() is going to be Null,
+        So the RLS policies are going to be violated, which we can fix by using the admin client or by using the access token of the session.
+        with supabase.auth.set_session(access_token, refresh_token = None) this tells who the user is, so the RLS policies are not violated.
+        and the auth.uid() is not going to be Null but the user_id.
+        """
         if self._client is None:
             self._client = create_client(
                 supabase_url=settings.supabase_url,

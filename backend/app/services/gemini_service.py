@@ -23,7 +23,7 @@ class GeminiService:
         #Add Supabase for phase 1: Direct History (Pass last n messages to Gemini)
         self.supabase = get_supabase_client()
     
-    async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None) -> str:
+    async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None, access_token: str = None, refresh_token: str = None) -> str:
         """
         Send a message to the Gemini API and return the response.
         """
@@ -31,12 +31,15 @@ class GeminiService:
             if not user_id:
                 raise Exception("User ID is required")
             
+            if access_token and refresh_token:
+                self.supabase.auth.set_session(access_token, refresh_token = refresh_token)
+            
             if not conversation_id: #if no previous conversation, create a new one
                 #First create a new conversation in supabase
                 conversation_id = await self._create_new_chat(user_id, message)
 
                 #Then create a new chat session (no history for a new chat)
-                chat = self.client.models.chats_create(
+                chat = self.client.chats.create(
                     model = "gemini-2.0-flash",
                     config = types.GenerateContentConfig(
                         system_instruction = "You are an excel expert that can answer questions and help with tasks.",
@@ -183,7 +186,7 @@ class GeminiService:
                     history = self._smart_truncate(history, MAX_HISTORY_TOKENS)
 
             #Phase1: Create a chat session with the history
-            chat = self.client.models.chats_create(
+            chat = self.client.chats.create(
                 model = "gemini-2.0-flash",
                 config = types.GenerateContentConfig(
                     system_instruction = "You are an excel expert that can answer questions and help with tasks.",
@@ -212,10 +215,15 @@ class GeminiService:
         """
         Take a text and return the number of tokens it contains. This is used to estimate the cost of the request.
         """
-        response = self.client.count_tokens(
-            model = "gemini-2.0-flash",
-            contents = text
-        )
+        try:
+            response = self.client.models.count_tokens(
+                model = "gemini-2.0-flash",
+                contents = text
+            )
+            return response
+        except Exception as e:
+            logger.error(f"Error counting tokens: {e}")
+            raise e
         return response
 
     def _format_history_for_counting(self, history: List) -> str:
@@ -237,7 +245,12 @@ class GeminiService:
                 if hasattr(content, 'parts') and content.parts:
                     #extract text from UserContent or ModelContent
                     for part in content.parts:
-                        text_parts.append(part)
+                        if hasattr(part, "text"):
+                            text_parts.append(part.text)
+                        elif isinstance(part, str):
+                            text_parts.append(part)
+                        else:
+                            text_parts.append(str(part))
             #join the text parts with a space
             return ' '.join(text_parts)
         

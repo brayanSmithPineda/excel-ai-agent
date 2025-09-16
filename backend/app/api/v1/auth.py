@@ -3,7 +3,7 @@ from app.schemas.auth import LoginRequest, LogoutResponse, SignupRequest, AuthRe
 from app.config.database import get_supabase_client
 from app.auth.dependencies import get_current_user
 from typing import Dict, Any
-
+from app.config.database import get_supabase_admin_client
 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -65,6 +65,18 @@ async def signup(request: SignupRequest) -> AuthResponse:
         )
         
         if response.user and response.session:
+            #Create a new user in the users table
+            admin_client = get_supabase_admin_client()
+            admin_client.table("users").insert({
+                "id": response.user.id,
+                "email": response.user.email,
+                "full_name": response.user.user_metadata.get("full_name") or response.user.email.split("@")[0],
+                "company": request.company,
+                "role": "user",
+                "is_active": True
+            }).execute()
+
+
             return AuthResponse(
                 user_id=response.user.id,
                 email=response.user.email,
