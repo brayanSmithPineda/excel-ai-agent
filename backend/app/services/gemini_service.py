@@ -8,6 +8,7 @@ from app.config.settings import settings
 from loguru import logger
 from app.config.database import get_supabase_client, get_supabase_admin_client
 from datetime import datetime
+import re
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat
@@ -356,6 +357,232 @@ class GeminiService:
 
         except Exception as e:
             logger.error(f"Error logging failed AI interaction: {e}")
+
+    async def generate_embedding(self, text: str, task_type: str = "SEMANTIC_SIMILARITY") -> List[float]:
+        f"""
+        Generate embedding from text using gemini-embedding-001 model.
+        Basically turns a text into a vector of numbers. like this [0.1, 0.2, 0.3, ...] (# dimensions 768)
+        
+        Args:
+            text: the text to generate embedding from.
+            task_type: the type of task to generate embedding for.
+                - "SEMANCTIC_SIMILARITY": check how similar in meaning strings of texts are. Check google docs for more details about the task_type.
+        Return: a list of float values representing the embedding.
+        """
+        try:
+            #use gemini-embedding-001 model to generate embedding
+            response = self.client.models.embed_content(
+                model = "gemini-embedding-001",
+                contents = text,
+                config = types.EmbedContentConfig(
+                    task_type = task_type,
+                    output_dimensionality = 768
+                )
+            )
+
+            #Extract the embedding vector from the response
+            embedding_vector = response.embeddings[0].values
+            return embedding_vector
+
+        except Exception as e:
+            logger.error(f"Error generating embedding: {e}")
+            raise e
+
+    async def _create_conversation_embedding(self, conversation_id: str, user_id: str, chunk_text: str, chunk_index: int,
+        metadata: dict = None) -> str:
+        """
+        Create and store an embedding vector for a chunk of conversation and store it in the conversation_embeddings table in supabase.
+        Args:
+            conversation_id: the id of the conversation.
+            user_id: the id of the user.
+            chunk_text: the text of the chunk.
+            chunk_index: the index of the chunk.
+            metadata: the metadata of the chunk.
+        Return: the id of the created embedding in supabase.
+        """
+        try:
+            #Generate embedding for the chunk
+            embedding_vector = await self.generate_embedding(chunk_text)
+
+            #Prepare metadata with default values
+            chunk_metadata = metadata or {} 
+            chunk_metadata.update({
+                'chunk_length': len(chunk_text),
+                'created_at': datetime.utcnow().isoformat()
+            })
+
+            #Insert embedding into supabase
+            embedding_data = {
+                'conversation_id': conversation_id,
+                'user_id': user_id,
+                'chunk_text': chunk_text,
+                'embedding': embedding_vector,
+                'chunk_index': chunk_index,
+                'metadata': chunk_metadata,
+            }
+
+            result = self.supabase.table('conversation_embeddings').insert(embedding_data).execute()
+
+            if not result.data:
+                raise Exception("Failed to create conversation embedding in Supabase")
+
+            embedding_id = result.data[0]['id']
+            return embedding_id
+        
+        except Exception as e:
+            logger.error(f"Error creating conversation embedding in Supabase: {e}")
+            raise e
+
+    async def _chunk_conversation(self, conversation_id: str) -> List[str]:
+        """
+        Intelligently chunk a conversation into semantically meaningful chunks/segments.
+        Args:
+            conversation_id: the id of the conversation.
+        Return: a list of chunks/segments with text, metadata, and context.
+        """
+        try:
+            # Get the full conversation from Supabase
+            conversation = self.supabase.table('ai_conversations').select('messages, user_id').eq('id',conversation_id).single().execute()
+
+            if not conversation.data:
+                raise Exception(f"Conversation {conversation_id} not found")
+
+            messages = conversation.data.get('messages', [])
+            user_id = conversation.data.get('user_id')
+
+            if len(messages) < 2:  # Need at least user + AI message
+                return []
+
+            chunks = []
+            current_chunk_messages = []
+            chunk_index = 0
+
+            # Process messages in pairs (user + AI response)
+            for i in range(0, len(messages) - 1, 2):
+                if i + 1 < len(messages):
+                    user_msg = messages[i]
+                    ai_msg = messages[i + 1]
+
+                    # Validate message roles
+                    if user_msg.get('role') == 'user' and ai_msg.get('role') == 'model':
+                        current_chunk_messages.extend([user_msg, ai_msg])
+
+                        # Decision point: Should we create a chunk here?
+                        if self._should_create_chunk(current_chunk_messages, i):
+                            chunk_data = self._create_chunk_data(
+                                messages=current_chunk_messages,
+                                conversation_id=conversation_id,
+                                user_id=user_id,
+                                chunk_index=chunk_index
+                            )
+                            chunks.append(chunk_data)
+
+                            # Reset for next chunk
+                            current_chunk_messages = []
+                            chunk_index += 1
+
+            # Handle remaining messages in final chunk
+            if current_chunk_messages:
+                chunk_data = self._create_chunk_data(
+                    messages=current_chunk_messages,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    chunk_index=chunk_index
+                )
+                chunks.append(chunk_data)
+
+            logger.info(f"Created {len(chunks)} intelligent chunks for conversation {conversation_id}")
+            return chunks
+
+        except Exception as e:
+            logger.error(f"Error chunking conversation {conversation_id}: {e}")
+            raise e 
+    def _should_create_chunk(self, current_message: List[str], message_index: int) -> bool:
+        """
+        Intelligent decision making for when to create a new chunk.
+        Factors: length, topic changes, excel function mentions, etc.
+        """
+        MAX_MESSAGE_PER_CHUNK = 8 # basically 4 user-ai exchanges
+        if len(current_message) >= MAX_MESSAGE_PER_CHUNK:
+            return True
+        
+        #Create a chunk if the total text length exceeds limit
+        total_text = ' '.join(msg.get('content', '') for msg in current_message)
+        MAX_CHUNK_CHARS = 1500
+        if len(total_text) > MAX_CHUNK_CHARS:
+            return True
+
+        #Topic change dectection (look for Excel function transition)
+        if len(current_message) >= 4: #at least 2 exchanges
+            recent_text = ' '.join(msg.get('content', '') for msg in current_message[-2:])
+            earlier_text = ' '.join(msg.get('content', '') for msg in current_message[:-2])
+
+            #Topic change detection: Different excel functions are used
+            recent_functions = self._extract_excel_functions(recent_text)
+            earlier_functions = self._extract_excel_functions(earlier_text)
+
+            if recent_functions and earlier_functions and not recent_functions.intersection(earlier_functions):
+                return True #Topic changed, create a new chunk
+
+        return False
+
+    def _create_chunk_data(self, messages: List[dict], conversation_id: str, user_id: str, chunk_index: int) -> dict:
+        """
+        Create a structured chunk with text and metadata
+        """
+        chunk_parts = []
+        for msg in messages:
+            role_label = "User" if msg.get('role') == 'user' else "Assistant"
+            content = msg.get('content', '')
+            chunk_parts.append(f"{role_label}: {content}")
+        
+        chunk_text = '\n\n'.join(chunk_parts)
+        
+        #Extract metadata for better search context
+        all_text = ' '.join(msg.get('content', '') for msg in messages)
+        excel_functions = self._extract_excel_functions(all_text)
+        metadata = {
+            'excel_functions_mentioned': list(excel_functions),
+            'message_count': len(messages),
+            'chunk_length': len(chunk_text),
+            'has_formulas': self._contains_excel_formulas(all_text),
+            'complexity_level': self._assess_complexity(all_text),
+        }   
+        return {
+            'conversation_id': conversation_id,
+            'user_id': user_id,
+            'chunk_text': chunk_text,
+            'chunk_index': chunk_index,
+            'metadata': metadata,
+        }
+    
+    def _extract_excel_functions(self, text: str) -> set:
+        """
+        Extract Excel functions mentioned in the text
+        """
+        # Common Excel functions pattern
+        excel_functions = re.findall(r"\b(VLOOKUP|HLOOKUP|INDEX|MATCH|SUMIF|COUNTIF|PIVOT|XLOOKUP|SUMIFS|COUNTIFS|IF|AND|OR|NOT|CONCATENATE|LEFT|RIGHT|MID|LEN|TRIM|UPPER|LOWER|IFERROR|IFNA|IFS|SWITCH|CHOOSE)\b", text.upper())
+        return set(excel_functions)
+    
+    def _contains_excel_formulas(self, text: str) -> bool:
+        """
+        Check if the text contains Excel formulas
+        """
+        return bool(re.search(r'=\w+\(', text))
+    
+    def _assess_complexity(self, text: str) -> str:
+        """
+        Assess complexity level of excel discussion
+        """
+        excel_functions = self._extract_excel_functions(text)
+        if len(excel_functions) >= 3:
+            return "complex"
+        elif len(excel_functions) >= 1:
+            return "intermediate"
+        else:
+            return "basic"
+    
+
 #Create an instance of the GeminiService class
 gemini_service = GeminiService()
 
