@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from google.genai.chats import Chat
 
 class GeminiService:
+
     def __init__(self):
         # Get API key from settings (which loads from .env file)
         if not settings.gemini_api_key:
@@ -27,6 +28,7 @@ class GeminiService:
     async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None, access_token: str = None, refresh_token: str = None) -> str:
         """
         Send a message to the Gemini API and return the response.
+        Use , direct history, semantic search, and lexical search to answer the question.
         """
         try:
             if not user_id:
@@ -35,15 +37,47 @@ class GeminiService:
             if access_token and refresh_token:
                 self.supabase.auth.set_session(access_token, refresh_token = refresh_token)
             
+            #Add semantic search for context from similar past conversations
+            relevant_context = ""
+            try:
+                #search for semantically similar past conversations
+                similar_chunks = await self.semantic_similarity_search(
+                    query = message,
+                    user_id = user_id,
+                    limit = 3,
+                    similarity_threshold = 0.8
+                )
+
+                if similar_chunks:
+                    context_parts = []
+                    for chunk in similar_chunks:
+                        context_parts.append(f"Previous conversation context: {chunk['chunk_text']}")
+                    relevant_context = "\n\n".join(context_parts)
+                else:
+                    logger.info(f"No relevant past conversation found for this query")
+                
+            except Exception as e:
+                logger.warning(f"Error performing semantic similarity search, continuing without context: {e}")
+                pass
+                
+            enhanced_message = message
+            if relevant_context:
+                enhanced_message = f"""User's current question: {message}
+                Relevant context from user's past Excel conversations:
+                {relevant_context}
+
+                Please answer the current question, and reference past context when helpful.
+                """ #this is the message we past to the AI , it contains the user's current question and the relevant context from the past conversations
+            
             if not conversation_id: #if no previous conversation, create a new one
-                #First create a new conversation in supabase
+                #First create a new conversation in supabase, use the original message for the title
                 conversation_id = await self._create_new_chat(user_id, message)
 
                 #Then create a new chat session (no history for a new chat)
                 chat = self.client.chats.create(
                     model = "gemini-2.0-flash",
                     config = types.GenerateContentConfig(
-                        system_instruction = "You are an excel expert that can answer questions and help with tasks.",
+                        system_instruction = "You are an excel expert that can answer questions and help with tasks. Use any provided context from the user's past conversations to give more personalized and relevant assistance.",
                         response_mime_type = "text/plain",
                         safety_settings= [
                             types.SafetySetting(
@@ -52,13 +86,13 @@ class GeminiService:
                             ),
                         ]
                     ),
-                    history = None # no history for a new chat
+                    history = None # no history for a new chatf
                 )
             else: #if there is a previous conversation, use it, this method is going to have the chat history
                 chat = self._get_existing_chat(conversation_id)
-            
+
             #send_message is a method of the chat object, it contains the message to send and some metadata about the response.
-            response = chat.send_message(message)
+            response = chat.send_message(enhanced_message)
 
             #Save the messages (user message and ai response) to supabase
             await self._append_messages(conversation_id, message, response.text)
@@ -80,6 +114,145 @@ class GeminiService:
 
             raise e
     
+    async def semantic_similarity_search(self, query: str, user_id: str, limit: int = 5, similarity_threshold: float = 0.8) -> List[dict]:
+        """
+        Takes a query and returns a list of chunks that are semantically similar to the query. Basically, Find past
+        conversation that are semantically similar to the query.
+        Args:
+            query: the query to search for.
+            user_id: the id of the user.
+            limit: the number of chunks to return.
+            similarity_threshold: the similarity threshold for the chunks, this is what we expect the similarity to be.
+        Return: a list of chunks that are semantically similar to the query based on the similarity threshold.
+        """
+        try:
+            # Generate embedding vector for the query
+            query_embedding = await self.generate_embedding(query)
+
+            # Call our supabase database function to find similar conversations
+            similar_conversations = self.supabase.rpc('similarity_search_conversations', {
+                'query_embedding': query_embedding,
+                'target_user_id': user_id,
+                'match_threshold': similarity_threshold,
+                'match_count': limit
+            }).execute()
+
+            #Process and return the results
+            results = []
+            for similar_conversation in similar_conversations.data:
+                #Convert database result to structured format
+                result_item = {
+                    'conversation_id': similar_conversation.get('conversation_id'),
+                    'chunk_text': similar_conversation.get('chunk_text'),
+                    'similarity_score': 1.0 - similar_conversation.get('distance', 1.0), #This converts distance like 0.2 to 0.8, so the higher the distance, the more similar the chunk is to the query.
+                    'metadata': similar_conversation.get('metadata', {}),
+                    'created_at': similar_conversation.get('created_at'),
+                    'distance': similar_conversation.get('distance'),
+                }
+                results.append(result_item)
+                
+            logger.info(f"Found {len(results)} semantically similar chunks for user {user_id}")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error performing semantic similarity search: {e}")
+            raise e
+
+    async def excel_function_search(self, query: str, limit: int = 10) -> List[dict]:
+        """
+        Multi-strategy search for Excel functions combining:
+        - Exact function name matching (Highest priority)
+        - Fuzzy name matching with similarity scoring
+        - Keyword array search
+        - Full-text description search
+        - Category filtering
+        Return: a list of Excel functions that match the query.
+        """
+        try:
+            #Clean the query
+            clean_query = query.strip().upper()
+            result = []
+
+            #Strategy 1: Exact function name matching (Highest priority)
+            exact_match = self.supabase.table('excel_functions').select('*').eq('function_name', clean_query).execute()
+
+            if exact_match.data:
+                for function in exact_match.data:
+                    function['relevance_score'] = 100 #Set the highest priority score for exact matches
+                    function['match_type'] = 'exact'
+                    result.append(function)
+            
+            #Strategy 2: Fuzzy name matching with similarity scoring (Starts with query)
+            if len(result) < limit:
+                prefix_match = self.supabase.table('excel_functions').select('*').like('function_name', f'{clean_query}%').execute()
+                for function in prefix_match.data:
+                    #avoid duplicates from exact match
+                    if not any(r['id'] == function['id'] for r in result):
+                        function['relevance_score'] = 80 #Set the second medium priority score for prefix matches
+                        function['match_type'] = 'prefix'
+                        result.append(function)
+            
+            #Strategy 3: Keyword array search
+            if len(result) < limit:
+                try:
+                    #Try first exact list match look for 'lookup' in the list ['vertical lookup', 'search', 'find', 'table lookup']
+                    keyword_match = self.supabase.table('excel_functions').select('*').overlaps('keywords', [query.lower()]).execute()
+                    for function in keyword_match.data:
+                        if not any(r['id'] == function['id'] for r in result):
+                            function['relevance_score'] = 60 #Set the third low priority score for keyword matches
+                            function['match_type'] = 'keyword'
+                            result.append(function)
+                    #if not exact match, try to find partial match in the list
+                    if len([r for r in result if r.get('match_type') == 'keyword']) == 0:
+                        all_functions = self.supabase.table('excel_functions').select('*').execute()
+                        for function in all_functions.data:
+                            if function.get('keywords') and not any(r['id'] == function['id'] for r in result):
+                                # Check if query partially matches any keyword
+                                for keyword in function['keywords']:
+                                    if query.lower() in keyword.lower():
+                                        function['relevance_score'] = 60
+                                        function['match_type'] = 'keyword_partial'
+                                        result.append(function)
+                                        break #break the loop if we found a match, to avoid adding the same function multiple times
+
+                except Exception as e:
+                    logger.error(f"Error performing keyword array search: {e}")
+                    pass
+
+            #Strategy 4: Full-text description search
+            if len(result) < limit:
+                #First try exact match
+                desc_match = self.supabase.table('excel_functions').select('*').ilike('description', f'%{query}%').execute()
+                for function in desc_match.data:
+                    if not any(r['id'] == function['id'] for r in result):
+                        function['relevance_score'] = 40 #Set the fourth low priority score for description matches
+                        function['match_type'] = 'description'
+                        result.append(function)
+            
+                #If not exact phrase math and query has multiple words, search for all words 
+                if len([r for r in result if r.get('match_type') == 'description']) == 0 and ' ' in query:
+                    words = [word.strip() for word in query.split() if len(word.strip()) > 2] #skip words less than 3 characters
+                    if words:
+                        all_functions = self.supabase.table('excel_functions').select('*').execute()
+                        for function in all_functions.data:
+                            if not any(r['id'] == function['id'] for r in result): # if not already in the result
+                                description = function.get('description', '').lower()
+                                #check if all words are in the description
+                                if all(word in description for word in words):
+                                    function['relevance_score'] = 35
+                                    function['match_type'] = 'description_multi_word'
+                                    result.append(function)
+
+            #Sort by relevance score
+            result.sort(key=lambda x: x['relevance_score'], reverse=True)
+            limited_result = result[:limit]
+            logger.info(f"Found {len(limited_result)} Excel functions for query: {query}")
+            return limited_result
+        
+        except Exception as e:
+            logger.error(f"Error performing excel function search: {e}")
+            raise e
+
     async def _create_new_chat(self, user_id: str, first_message: str) -> str:
         """
         We need to first sabe the conversation to supabase before send the message to Gemini.
@@ -497,6 +670,7 @@ class GeminiService:
         except Exception as e:
             logger.error(f"Error chunking conversation {conversation_id}: {e}")
             raise e 
+    
     def _should_create_chunk(self, current_message: List[str], message_index: int) -> bool:
         """
         Intelligent decision making for when to create a new chunk.
@@ -582,7 +756,7 @@ class GeminiService:
         else:
             return "basic"
     
-
+    
 #Create an instance of the GeminiService class
 gemini_service = GeminiService()
 
