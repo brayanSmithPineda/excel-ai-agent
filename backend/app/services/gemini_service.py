@@ -1,7 +1,7 @@
 """
 This service is responsible for interacting with the Gemini API.
 """
-from typing import TYPE_CHECKING, Optional, List
+from typing import TYPE_CHECKING, Optional, List, Dict, Any
 from google import genai
 from google.genai import types
 from app.config.settings import settings
@@ -12,6 +12,12 @@ import re
 
 if TYPE_CHECKING:
     from google.genai.chats import Chat
+
+from app.services.excel_parser_service import (
+    DynamicSymbolTable,
+    ExcelFormulaParser,
+    ExcelContext
+)
 
 class GeminiService:
 
@@ -24,6 +30,9 @@ class GeminiService:
         self.client = client
         #Add Supabase for phase 1: Direct History (Pass last n messages to Gemini)
         self.supabase = get_supabase_client()
+        #Add DynamicSymbolTable and ExcelFormulaParser for phase 3.3.4: HybridSearchIntegration (Finite + Infinite Search)
+        self.symbol_table = DynamicSymbolTable()
+        self.parser = ExcelFormulaParser()
     
     async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None, access_token: str = None, refresh_token: str = None) -> str:
         """
@@ -37,37 +46,66 @@ class GeminiService:
             if access_token and refresh_token:
                 self.supabase.auth.set_session(access_token, refresh_token = refresh_token)
             
-            #Add semantic search for context from similar past conversations
-            relevant_context = ""
+            #Add hybrid search for comprehensive context
             try:
-                #search for semantically similar past conversations
-                similar_chunks = await self.semantic_similarity_search(
-                    query = message,
-                    user_id = user_id,
-                    limit = 3,
-                    similarity_threshold = 0.8
+                # NEW: Use complete hybrid search for comprehensive context
+                logger.info(f"Starting hybrid search for user message: {message}")
+
+                # Create Excel context if available (this would come from the Excel add-in in real usage)
+                # For now, we'll use a default context, but in production this comes from the frontend
+                excel_context = ExcelContext(sheet_name="Sheet1")  # This would be passed from Excel add-in
+
+                # Get comprehensive search results using all three strategies
+                hybrid_results = await self.hybrid_lexical_search(
+                    query=message,
+                    user_id=user_id,
+                    excel_context=excel_context,  # Excel add-in would provide this
+                    limit=8  # Get more results since we have three search types
                 )
 
-                if similar_chunks:
-                    context_parts = []
-                    for chunk in similar_chunks:
-                        context_parts.append(f"Previous conversation context: {chunk['chunk_text']}")
-                    relevant_context = "\n\n".join(context_parts)
+                # Build enhanced context from all search results
+                relevant_context = ""
+                context_parts = []
+
+                # Add finite search context (Excel functions)
+                if hybrid_results['finite_search_results']:
+                    excel_functions = [f"Excel function: {result['function_name']} - {result.get('description', 'N/A')}"
+                                        for result in hybrid_results['finite_search_results'][:2]]
+                    context_parts.extend(excel_functions)
+
+                # Add infinite search context (User symbols)
+                if hybrid_results['infinite_search_results']:
+                    user_symbols = [f"Your workbook contains: {result['symbol_name']} ({result['symbol_type']}) in {result.get('sheet_context', 'unknown sheet')}"
+                                    for result in hybrid_results['infinite_search_results'][:2]]
+                    context_parts.extend(user_symbols)
+
+                # Add semantic search context (Past conversations)
+                if hybrid_results['semantic_search_results']:
+                    past_context = [f"Previous conversation: {chunk['chunk_text'][:200]}..."
+                                    for chunk in hybrid_results['semantic_search_results'][:2]]
+                    context_parts.extend(past_context)
+
+                # Combine all context
+                if context_parts:
+                    relevant_context = "\n".join(context_parts)
+                    logger.info(f"Enhanced context built with {len(context_parts)} context pieces from {len(hybrid_results['search_metadata']['search_strategies'])} search strategies")
                 else:
-                    logger.info(f"No relevant past conversation found for this query")
-                
+                    logger.info("No relevant context found from hybrid search")
+
             except Exception as e:
-                logger.warning(f"Error performing semantic similarity search, continuing without context: {e}")
-                pass
-                
+                logger.warning(f"Hybrid search failed, falling back to basic message: {e}")
+                relevant_context = ""
+
+            # Enhanced message construction (replace existing enhanced_message logic)
             enhanced_message = message
             if relevant_context:
                 enhanced_message = f"""User's current question: {message}
-                Relevant context from user's past Excel conversations:
+                Relevant context from comprehensive search:
                 {relevant_context}
-
-                Please answer the current question, and reference past context when helpful.
-                """ #this is the message we past to the AI , it contains the user's current question and the relevant context from the past conversations
+                Please answer the current question using this context when helpful. If you reference Excel functions, explain how to use 
+                them. If you reference the user's workbook data, be specific about locations.
+            """
+            logger.info("Message enhanced with hybrid search context")#this is the message we past to the AI , it contains the user's current question and the relevant context from the past conversations
             
             if not conversation_id: #if no previous conversation, create a new one
                 #First create a new conversation in supabase, use the original message for the title
@@ -113,6 +151,104 @@ class GeminiService:
                     pass
 
             raise e
+    
+    async def hybrid_lexical_search(self, query: str, user_id: str, excel_context: ExcelContext = None, limit: int = 10) -> Dict[str, Any]:
+        f"""
+        HYBRID SEARCH: Combine finite + infinite + semantic search   
+        This method combines:
+        1. Finite search: Excel functions database (VLOOKUP, INDEX, etc.) Look in the excel_functions table in supabase.
+        2. Infinite search: User content analysis. Parse the user's spreadsheet content and extract the symbols.
+        3. Semantic search: Find past conversations that are semantically similar to the query.
+        
+        Args:
+            query: the query to search for.
+            excel_context: Current excel context (sheet, workbook info)
+            limit: the number of results to return.
+        Return: a dictionary containing the results of the hybrid search.
+
+        Example User Query: "Find my sales data and show me how to calculate totals"
+
+        1. Finite Search finds: SUM, SUMIF, TOTAL functions from Excel database
+        2. Infinite Search finds: User's actual symbols like Sales_Data, Q1_Revenue ranges
+        3. Semantic Search finds: Past conversations about similar calculations
+        """
+        if not user_id:
+            raise ValueError("user_id is required for hybrid search - user must be authenticated")
+
+        #Initialize results
+        search_results = {
+            'query': query,
+            'total_results': 0,
+            'finite_search_results': [],
+            'infinite_search_results': [],
+            'semantic_search_results': [],
+            'combined_results': [],
+            'search_metadata': {
+                'has_user_id': user_id is not None,
+                'has_excel_context': excel_context is not None,
+                'search_strategies': []
+            }
+        }
+
+        try:
+            #STRATEGY 1: FINITE SEARCH - Supabase Excel Functions Database
+            #Use our existing excel_function_search method to find matching functions
+            logger.info(f"Starting finite search for query: {query}")
+            finite_results = await self.excel_function_search(query, limit = 5)
+            search_results['finite_search_results'] = finite_results
+            search_results['search_metadata']['search_strategies'].append('finite_search')
+
+            logger.info(f"Found {len(finite_results)} finite search results for query: {query}")
+
+            #STRATEGY 2: INFINITE SEARCH - User Content Analysis (if excel context is provided)
+            if excel_context:
+                logger.info(f"Starting infinite search with context: {excel_context.sheet_name}")
+                infinite_results = await self._infinite_search_user_symbols(query, excel_context, limit = 5)
+                search_results['infinite_search_results'] = infinite_results
+                search_results['search_metadata']['search_strategies'].append('infinite_search')
+
+                logger.info(f"Found {len(infinite_results)} infinite search results for query: {query}")
+            else:
+                logger.info(f"No excel context provided, skipping infinite search for query: {query}")
+            
+            #STRATEGY 3: SEMANTIC SEARCH - Find past conversations that are semantically similar to the query
+            #Note: we will implement this later
+            if user_id:
+                logger.info(f"Starting semantic search for user {user_id}")
+                semantic_results = await self.semantic_similarity_search(query, user_id, limit = 3, similarity_threshold = 0.7)
+                search_results['semantic_search_results'] = semantic_results
+                search_results['search_metadata']['search_strategies'].append('semantic_search')
+
+                logger.info(f"Found {len(semantic_results)} semantic search results for query: {query}")
+            
+
+            #COMBINE RESULTS
+            all_results = []
+
+            #Add finite search results with metadata
+            for result in finite_results:
+                all_results.append({
+                    'type': 'excel_function',
+                    'source': 'finite_search',
+                    'relevance_score': result.get('relevance_score', 50),
+                    'data': result
+                })
+            
+            # Sort by relevance score (highest first)
+
+            all_results.sort(key=lambda x: x['relevance_score'], reverse=True)
+
+            # Take top results
+            search_results['combined_results'] = all_results[:limit]
+            search_results['total_results'] = len(all_results)
+
+            logger.info(f"Hybrid search completed: {search_results['total_results']} total results")
+            return search_results
+
+        except Exception as e:
+            logger.error(f"Error in hybrid_lexical_search: {e}")
+            search_results['error'] = str(e)
+            return search_results
     
     async def semantic_similarity_search(self, query: str, user_id: str, limit: int = 5, similarity_threshold: float = 0.8) -> List[dict]:
         """
@@ -252,6 +388,69 @@ class GeminiService:
         except Exception as e:
             logger.error(f"Error performing excel function search: {e}")
             raise e
+
+    async def _infinite_search_user_symbols(self, query: str, excel_context: ExcelContext, limit: int = 5) -> List[dict]:
+        """
+        Search through user-created symbols in the DynamicSymbolTable.
+        Args:
+            query: the query to search for.
+            excel_context: Current excel context (sheet, workbook info)
+            limit: the number of results to return.
+        Return: a list of user symbols that match the query.
+        """
+        try:
+            results = []
+            query_lower = query.lower()
+
+            # Search through all registered symbols in the symbol table
+            for symbol_key, symbol_definition in self.symbol_table.symbols.items():
+                relevance_score = 0
+                match_type = None
+
+                # Strategy 1: Exact symbol name match
+                if query_lower in symbol_definition.symbol.name.lower():
+                    relevance_score = 90
+                    match_type = 'exact_name'
+
+                # Strategy 2: Symbol type matching (if user asks about "ranges", "cells", etc.)
+                elif query_lower in symbol_definition.data_type.lower():
+                    relevance_score = 70
+                    match_type = 'type_match'
+
+                # Strategy 3: Sheet context matching (if user asks about specific sheet)
+                elif excel_context.sheet_name and excel_context.sheet_name.lower() in symbol_key.lower():
+                    relevance_score = 60
+                    match_type = 'sheet_match'
+
+                # Strategy 4: Current value matching (if symbol has a value)
+                elif (symbol_definition.current_value and
+                        str(symbol_definition.current_value).lower().find(query_lower) >= 0):
+                    relevance_score = 80
+                    match_type = 'value_match'
+
+                # If we found a match, add it to results
+                if relevance_score > 0:
+                    result_item = {
+                        'symbol_key': symbol_key,
+                        'symbol_name': symbol_definition.symbol.name,
+                        'symbol_type': symbol_definition.symbol.symbol_type.value,
+                        'data_type': symbol_definition.data_type,
+                        'sheet_context': symbol_definition.sheet_context,
+                        'current_value': symbol_definition.current_value,
+                        'last_updated': symbol_definition.last_updated.isoformat(),
+                        'is_volatile': symbol_definition.is_volatile,
+                        'relevance_score': relevance_score,
+                        'match_type': match_type
+                    }
+                    results.append(result_item)
+
+            # Sort by relevance score and limit results
+            results.sort(key=lambda x: x['relevance_score'], reverse=True)
+            return results[:limit]
+
+        except Exception as e:
+            logger.error(f"Error in infinite search: {e}")
+            return []
 
     async def _create_new_chat(self, user_id: str, first_message: str) -> str:
         """
