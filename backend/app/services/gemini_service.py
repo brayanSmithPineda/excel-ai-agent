@@ -193,21 +193,28 @@ class GeminiService:
         try:
             #STRATEGY 1: FINITE SEARCH - Supabase Excel Functions Database
             #Use our existing excel_function_search method to find matching functions
-            logger.info(f"Starting finite search for query: {query}")
-            finite_results = await self.excel_function_search(query, limit = 5)
-            search_results['finite_search_results'] = finite_results
-            search_results['search_metadata']['search_strategies'].append('finite_search')
+            try:
+                logger.info(f"Starting finite search for query: {query}")
+                finite_results = await self.excel_function_search(query, limit = 5)
+                search_results['finite_search_results'] = finite_results
+                search_results['search_metadata']['search_strategies'].append('finite_search')
 
-            logger.info(f"Found {len(finite_results)} finite search results for query: {query}")
+                logger.info(f"Found {len(finite_results)} finite search results for query: {query}")
+            except Exception as e:
+                logger.warning(f"Error in finite search: {e}")
+                search_results['finite_search_results'] = []
 
             #STRATEGY 2: INFINITE SEARCH - User Content Analysis (if excel context is provided)
             if excel_context:
                 logger.info(f"Starting infinite search with context: {excel_context.sheet_name}")
-                infinite_results = await self._infinite_search_user_symbols(query, excel_context, limit = 5)
-                search_results['infinite_search_results'] = infinite_results
-                search_results['search_metadata']['search_strategies'].append('infinite_search')
-
-                logger.info(f"Found {len(infinite_results)} infinite search results for query: {query}")
+                try:
+                    infinite_results = await self._infinite_search_user_symbols(query, excel_context, limit = 5)
+                    search_results['infinite_search_results'] = infinite_results
+                    search_results['search_metadata']['search_strategies'].append('infinite_search')
+                    logger.info(f"Found {len(infinite_results)} infinite search results for query: {query}")
+                except Exception as e:
+                    logger.warning(f"Error in infinite search: {e}")
+                    search_results['infinite_search_results'] = []
             else:
                 logger.info(f"No excel context provided, skipping infinite search for query: {query}")
             
@@ -215,12 +222,15 @@ class GeminiService:
             #Note: we will implement this later
             if user_id:
                 logger.info(f"Starting semantic search for user {user_id}")
-                semantic_results = await self.semantic_similarity_search(query, user_id, limit = 3, similarity_threshold = 0.7)
-                search_results['semantic_search_results'] = semantic_results
-                search_results['search_metadata']['search_strategies'].append('semantic_search')
+                try:
+                    semantic_results = await self.semantic_similarity_search(query, user_id, limit = 3, similarity_threshold = 0.7)
+                    search_results['semantic_search_results'] = semantic_results
+                    search_results['search_metadata']['search_strategies'].append('semantic_search')
 
-                logger.info(f"Found {len(semantic_results)} semantic search results for query: {query}")
-            
+                    logger.info(f"Found {len(semantic_results)} semantic search results for query: {query}")
+                except Exception as e:
+                    logger.warning(f"Error in semantic search: {e}")
+                    search_results['semantic_search_results'] = []
 
             #COMBINE RESULTS
             all_results = []
