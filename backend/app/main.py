@@ -6,6 +6,8 @@ from app.auth.dependencies import get_current_user
 from typing import Dict, Any
 from fastapi import Depends
 from app.api.v1.auth import router as auth_router
+from app.api.v1.ai_executor import router as ai_executor_router
+from app.api.v1.chat import router as chat_router
 
 #Create the FastAPI app instance
 app = FastAPI(
@@ -26,6 +28,12 @@ app.add_middleware(
 
 #Router Prefix
 app.include_router(auth_router, prefix = "/api/v1")
+
+#With this line we do not need to include the new endpoint in the main.py file, because it is already included in the ai_executor_router
+app.include_router(ai_executor_router, prefix = "/api/v1") #include the ai_executor_router in the app
+
+app.include_router(chat_router, prefix = "/api/v1") #include the chat_router in the app
+
 
 #Basic healt check endpoint to test the API
 @app.get("/health")

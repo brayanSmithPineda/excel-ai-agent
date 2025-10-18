@@ -44,6 +44,7 @@
   <!-- This is a security feature to prevent malicious redirects -->
   <AppDomains>
     <AppDomain>https://localhost:3000</AppDomain>
+    <AppDomain>https://localhost:8000</AppDomain> <!-- Backend API -->
     <!-- Add your backend domain here when deploying to production -->
     <!-- <AppDomain>https://your-backend-api.com</AppDomain> -->
   </AppDomains>

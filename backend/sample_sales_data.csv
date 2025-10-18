@@ -1,0 +1,151 @@
+Date,Product,Quantity,Price,Revenue,Customer,Region
+2024-01-05,Laptop,5,1378.4,6892.0,Customer_045,West
+2024-01-07,Headphones,4,117.2,468.8,Customer_017,East
+2024-01-07,Headphones,8,243.03,1944.24,Customer_047,West
+2024-01-08,Headphones,1,105.22,105.22,Customer_039,North
+2024-01-08,Laptop,1,871.58,871.58,Customer_003,South
+2024-01-17,Headphones,6,137.11,822.66,Customer_019,South
+2024-01-18,Webcam,10,23.71,237.1,Customer_033,North
+2024-01-20,Laptop,6,1311.82,7870.92,Customer_040,North
+2024-01-20,USB Cable,1,77.9,77.9,Customer_009,North
+2024-01-24,Headphones,5,66.42,332.1,Customer_015,East
+2024-01-26,Headphones,8,207.5,1660.0,Customer_037,East
+2024-01-26,Monitor,7,560.74,3925.18,Customer_048,East
+2024-01-29,Keyboard,7,53.19,372.33,Customer_010,South
+2024-01-31,Laptop,9,1444.48,13000.32,Customer_029,East
+2024-02-03,Mouse,4,55.88,223.52,Customer_031,South
+2024-02-04,Headphones,10,262.05,2620.5,Customer_025,East
+2024-02-04,Desk Lamp,6,18.04,108.24,Customer_041,South
+2024-02-04,Mouse,7,74.94,524.58,Customer_040,West
+2024-02-06,Monitor,4,312.17,1248.68,Customer_034,North
+2024-02-12,Webcam,8,75.04,600.32,Customer_017,South
+2024-02-14,Desk Lamp,10,25.51,255.1,Customer_036,South
+2024-02-21,USB Cable,1,18.3,18.3,Customer_050,South
+2024-02-21,Desk Lamp,2,11.54,23.08,Customer_006,South
+2024-02-25,Desk Lamp,4,37.25,149.0,Customer_011,South
+2024-02-26,Laptop,8,1422.72,11381.76,Customer_031,West
+2024-03-02,Monitor,8,226.23,1809.84,Customer_004,South
+2024-03-06,Headphones,8,139.91,1119.28,Customer_034,West
+2024-03-15,Laptop,7,1216.74,8517.18,Customer_023,North
+2024-03-15,Headphones,1,249.56,249.56,Customer_018,North
+2024-03-16,Webcam,1,53.1,53.1,Customer_001,West
+2024-03-16,Mouse,8,50.28,402.24,Customer_049,East
+2024-03-18,Keyboard,6,56.46,338.76,Customer_032,East
+2024-03-19,Headphones,5,184.96,924.8,Customer_044,North
+2024-03-22,Headphones,7,108.49,759.43,Customer_034,East
+2024-03-23,Laptop,7,1327.44,9292.08,Customer_036,East
+2024-03-25,Laptop,3,904.25,2712.75,Customer_003,North
+2024-03-25,Mouse,5,20.64,103.2,Customer_017,East
+2024-03-26,USB Cable,2,31.71,63.42,Customer_031,North
+2024-03-27,Monitor,5,391.92,1959.6,Customer_044,East
+2024-03-28,USB Cable,7,34.64,242.48,Customer_026,West
+2024-03-29,USB Cable,9,16.3,146.7,Customer_007,South
+2024-03-30,Mouse,6,57.05,342.3,Customer_050,South
+2024-03-30,Mouse,10,60.98,609.8,Customer_016,West
+2024-04-05,Keyboard,10,86.18,861.8,Customer_044,South
+2024-04-06,Desk Lamp,6,35.37,212.22,Customer_003,South
+2024-04-06,Headphones,4,102.34,409.36,Customer_008,South
+2024-04-08,Webcam,4,42.23,168.92,Customer_033,West
+2024-04-18,Keyboard,4,25.5,102.0,Customer_008,East
+2024-04-28,Monitor,6,467.83,2806.98,Customer_047,West
+2024-04-29,USB Cable,5,35.07,175.35,Customer_013,North
+2024-04-30,Headphones,2,184.58,369.16,Customer_008,South
+2024-05-01,Monitor,10,489.08,4890.8,Customer_025,South
+2024-05-04,Keyboard,2,97.6,195.2,Customer_034,North
+2024-05-06,Monitor,10,317.15,3171.5,Customer_039,North
+2024-05-08,Monitor,10,480.25,4802.5,Customer_002,East
+2024-05-09,Laptop,1,1095.22,1095.22,Customer_043,South
+2024-05-11,Webcam,7,79.58,557.06,Customer_002,West
+2024-05-14,Desk Lamp,5,25.83,129.15,Customer_036,North
+2024-05-15,Monitor,10,575.1,5751.0,Customer_048,East
+2024-05-22,USB Cable,5,21.57,107.85,Customer_050,East
+2024-05-23,Keyboard,9,59.88,538.92,Customer_031,North
+2024-06-08,Webcam,3,23.97,71.91,Customer_031,West
+2024-06-09,Mouse,1,48.12,48.12,Customer_044,East
+2024-06-13,Mouse,2,65.0,130.0,Customer_010,North
+2024-06-14,Mouse,2,33.62,67.24,Customer_045,East
+2024-06-14,Keyboard,4,96.39,385.56,Customer_017,South
+2024-06-17,Webcam,3,74.89,224.67,Customer_050,East
+2024-06-18,Monitor,2,497.07,994.14,Customer_002,East
+2024-06-23,Headphones,7,132.24,925.68,Customer_012,North
+2024-06-27,Desk Lamp,7,57.65,403.55,Customer_037,South
+2024-07-07,Desk Lamp,4,68.59,274.36,Customer_048,South
+2024-07-08,USB Cable,2,50.6,101.2,Customer_036,North
+2024-07-08,USB Cable,2,20.09,40.18,Customer_032,West
+2024-07-11,Desk Lamp,2,63.88,127.76,Customer_010,West
+2024-07-11,Keyboard,6,45.02,270.12,Customer_017,West
+2024-07-13,Headphones,7,73.56,514.92,Customer_010,West
+2024-07-14,Laptop,1,1407.18,1407.18,Customer_016,North
+2024-07-15,Desk Lamp,10,34.96,349.6,Customer_027,North
+2024-07-17,Monitor,4,563.08,2252.32,Customer_046,South
+2024-07-19,Headphones,2,169.46,338.92,Customer_036,West
+2024-07-19,Headphones,6,151.62,909.72,Customer_022,North
+2024-07-21,Webcam,4,39.14,156.56,Customer_033,East
+2024-07-22,Desk Lamp,2,51.7,103.4,Customer_023,East
+2024-07-26,Laptop,5,1111.31,5556.55,Customer_048,East
+2024-07-27,Monitor,4,400.0,1600.0,Customer_006,South
+2024-07-30,USB Cable,2,29.98,59.96,Customer_039,East
+2024-07-31,Webcam,4,17.07,68.28,Customer_046,South
+2024-07-31,Webcam,1,35.99,35.99,Customer_030,West
+2024-07-31,Webcam,10,63.56,635.6,Customer_038,South
+2024-08-07,Desk Lamp,10,34.46,344.6,Customer_013,South
+2024-08-07,Keyboard,5,76.68,383.4,Customer_003,North
+2024-08-10,Desk Lamp,2,71.19,142.38,Customer_019,South
+2024-08-12,Monitor,9,284.52,2560.68,Customer_041,North
+2024-08-18,Monitor,4,238.14,952.56,Customer_001,South
+2024-08-18,Keyboard,2,84.46,168.92,Customer_030,East
+2024-08-19,Webcam,7,76.05,532.35,Customer_016,West
+2024-08-24,Keyboard,8,89.09,712.72,Customer_025,South
+2024-08-27,Keyboard,9,85.43,768.87,Customer_007,North
+2024-08-28,Mouse,5,81.35,406.75,Customer_034,West
+2024-08-30,Monitor,6,412.12,2472.72,Customer_046,East
+2024-08-31,Keyboard,3,32.53,97.59,Customer_049,South
+2024-09-05,Monitor,6,217.89,1307.34,Customer_016,East
+2024-09-05,USB Cable,9,23.5,211.5,Customer_003,East
+2024-09-10,Webcam,2,13.89,27.78,Customer_041,South
+2024-09-18,Laptop,1,1042.16,1042.16,Customer_008,West
+2024-09-21,Webcam,4,38.69,154.76,Customer_027,East
+2024-09-21,Keyboard,1,82.3,82.3,Customer_014,North
+2024-09-23,Webcam,1,26.11,26.11,Customer_041,South
+2024-09-23,Keyboard,5,70.29,351.45,Customer_001,West
+2024-09-25,Monitor,10,331.0,3310.0,Customer_044,North
+2024-09-27,USB Cable,4,59.13,236.52,Customer_032,North
+2024-09-28,Keyboard,7,24.78,173.46,Customer_002,South
+2024-10-02,Webcam,5,39.22,196.1,Customer_001,South
+2024-10-02,Laptop,5,803.39,4016.95,Customer_019,East
+2024-10-05,Headphones,7,289.94,2029.58,Customer_024,West
+2024-10-08,Keyboard,9,36.97,332.73,Customer_022,South
+2024-10-10,Desk Lamp,1,48.88,48.88,Customer_006,West
+2024-10-11,Mouse,8,58.04,464.32,Customer_047,South
+2024-10-19,Keyboard,7,20.85,145.95,Customer_015,North
+2024-10-29,USB Cable,3,42.85,128.55,Customer_026,West
+2024-11-02,Keyboard,1,66.02,66.02,Customer_035,South
+2024-11-09,Headphones,2,119.11,238.22,Customer_018,East
+2024-11-13,Monitor,7,230.13,1610.91,Customer_001,West
+2024-11-14,Laptop,6,1440.22,8641.32,Customer_043,West
+2024-11-14,Mouse,6,36.97,221.82,Customer_031,South
+2024-11-16,Keyboard,7,39.76,278.32,Customer_038,South
+2024-11-17,Mouse,4,87.52,350.08,Customer_050,South
+2024-11-17,Monitor,3,471.96,1415.88,Customer_020,South
+2024-11-18,USB Cable,1,59.59,59.59,Customer_011,North
+2024-11-18,USB Cable,2,41.54,83.08,Customer_029,West
+2024-11-19,Webcam,4,75.66,302.64,Customer_043,East
+2024-11-21,Keyboard,5,32.56,162.8,Customer_034,North
+2024-11-23,Desk Lamp,7,12.87,90.09,Customer_038,West
+2024-11-26,Desk Lamp,9,60.56,545.04,Customer_004,North
+2024-11-26,Webcam,5,65.63,328.15,Customer_046,North
+2024-11-28,Headphones,10,151.42,1514.2,Customer_048,South
+2024-11-28,Laptop,3,1011.15,3033.45,Customer_040,North
+2024-11-28,Webcam,10,41.0,410.0,Customer_043,North
+2024-11-28,Headphones,7,74.47,521.29,Customer_029,North
+2024-11-29,Desk Lamp,8,30.14,241.12,Customer_024,West
+2024-12-03,Webcam,7,49.9,349.3,Customer_005,South
+2024-12-11,Webcam,6,49.54,297.24,Customer_041,East
+2024-12-11,Monitor,4,424.78,1699.12,Customer_041,West
+2024-12-11,Headphones,4,249.2,996.8,Customer_022,West
+2024-12-14,Desk Lamp,7,13.75,96.25,Customer_031,East
+2024-12-17,Monitor,5,519.58,2597.9,Customer_036,North
+2024-12-25,Headphones,4,289.79,1159.16,Customer_050,West
+2024-12-28,Keyboard,7,95.46,668.22,Customer_021,North
+2024-12-30,Monitor,1,379.58,379.58,Customer_050,South
+2024-12-31,Laptop,4,955.13,3820.52,Customer_010,North

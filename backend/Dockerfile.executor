@@ -1,0 +1,73 @@
+# Dockerfile.executor - Secure Python Docker Image for Excel AI Agent, is an execution environment
+# This container is the "hotel room" where AI code runs safely
+#it is isolated from the host system and has minimal tools installed
+
+#Base image: Python 3.13 slim(minimal, no unnecessary packages)
+#slim variant = smaller size, fewer attack surfaces
+
+FROM python:3.13-slim
+
+#Metadata about the container
+LABEL description="Isolated Python execution environment for Excel AI Agent"
+LABEL version="1.0"
+LABEL security="sandboxed"
+
+# ===== INSTALL BUILD DEPENDENCIES =====
+# pandas and numpy require C compilers to build from source
+# We install build tools, build the packages, then remove the tools to keep image small
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+#Instal ONLY the libraries AI code needs for excel operations
+#We use --no-cache-dir to keep the image small
+
+# Install LOW_RISK libraries (always allowed)
+RUN pip install --no-cache-dir \
+    pandas \
+    openpyxl \
+    numpy \
+    xlrd 
+
+# Install MEDIUM_RISK libraries (user must approve via validator)
+# These are pre-installed but validation happens BEFORE execution
+RUN pip install --no-cache-dir \
+    requests \
+    urllib3 \
+    pyxlsb \
+    httpx
+
+# ===== CLEANUP BUILD DEPENDENCIES =====
+# Remove build tools to reduce image size and attack surface
+# This is a security best practice - don't leave compilers in production containers
+RUN apt-get purge -y gcc g++ && apt-get autoremove -y
+
+#Create directories for file exchange between host and container
+#/tmp/input where uploaded files are stored
+#/tmp/output where generated files are saved
+RUN mkdir -p /tmp/input /tmp/output
+
+#set persmissions (777= everyone can read/write)
+RUN chmod 777 /tmp/input /tmp/output
+
+# Security: Create a non-root user to run code
+# Running as root is dangerous - if AI code escapes, it has full container access
+# Running as "sandbox" user limits damage
+RUN useradd -m -u 1000 sandbox
+
+# Security: Make sure sandbox user owns the tmp directories
+RUN chown -R sandbox:sandbox /tmp/input /tmp/output
+
+# Switch to non-root user for all subsequent commands
+USER sandbox
+
+# Set working directory
+WORKDIR /tmp
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Default command (will be overridden when we run code)
+CMD ["python", "--version"]

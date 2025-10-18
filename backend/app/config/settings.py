@@ -34,7 +34,8 @@ class Settings(BaseSettings): #BaseSettings is a class that provides the basic f
 
     #CORS Configuration for Excel Add-In, origins that can communicate with the API
     allowed_origins: List[str] = [
-          "https://localhost:3000", #Development
+          "https://localhost:3000", #Development (HTTPS)
+          "http://localhost:3000",  #Development (HTTP - temporary for testing)
           "https://excel.office.com", #Excel on the web
           "https://excel.officeapps.live.com" #Excel online
       ]
