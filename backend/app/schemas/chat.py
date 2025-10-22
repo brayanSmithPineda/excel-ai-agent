@@ -27,6 +27,9 @@ class ChatRequest(BaseModel):
     enable_excel_search: bool = Field(True, description="Search Excel functions")
     enable_hybrid_search: bool = Field(True, description="Full hybrid search")
 
+    #Temporary for testing without full auth system
+    access_token: Optional[str] = Field(None, description="User's access token")
+    refresh_token: Optional[str] = Field(None, description="User's refresh token")
 class ChatResponse(BaseModel):
     """
     Response model for chat completion

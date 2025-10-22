@@ -132,13 +132,23 @@ class GeminiService:
             #send_message is a method of the chat object, it contains the message to send and some metadata about the response.
             response = chat.send_message(enhanced_message)
 
+            #debugging: print the response
+            logger.info(f"Response from Gemini API: {response}")
+
             #Save the messages (user message and ai response) to supabase
             await self._append_messages(conversation_id, message, response.text)
 
-            #Add audit log to track the interaction in audit_logs table in supabase
+            #Ardd audit log to track the interaction in audit_logs table in supabase
             await self._log_ai_interaction(user_id, conversation_id, message, response.text)
 
-            return response.text
+            return {
+                "ai_response": response.text,
+                "conversation_id": conversation_id,
+                "semantic_context": hybrid_results.get('semantic_search_results', []),
+                "excel_functions": hybrid_results.get('finite_search_results', []),
+                "symbols": hybrid_results.get('infinite_search_results', []),
+                "tokens_used": self._estimate_tokens(response.text).total_tokens
+            }
             
         except Exception as e:
             logger.error(f"Error sending message to Gemini API: {e}")

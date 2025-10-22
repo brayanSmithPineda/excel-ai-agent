@@ -47,9 +47,12 @@ async def chat_completion(
     """
     try:
         #Tempoary: Use a fixed user id for testing
-        user_id = "unauthenticated"
+        user_id = "3fdc19ef-75eb-460b-a9b1-ebc5b5b8436b"
         logger.info(f"Chat completion request from user {user_id}: {request.message[:50]}...")
 
+        access_token = "eyJhbGciOiJIUzI1NiIsImtpZCI6IlpSMmdFbHhvdklRSlBUcTMiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2Jqc2NkbmNoaG5wc3RrYmNtcGt1LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzZmRjMTllZi03NWViLTQ2MGItYTliMS1lYmM1YjViODQzNmIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzYxMDE0NDc3LCJpYXQiOjE3NjEwMTA4NzcsImVtYWlsIjoidGVzdHVzZXJAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbCI6InRlc3R1c2VyQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6IjNmZGMxOWVmLTc1ZWItNDYwYi1hOWIxLWViYzViNWI4NDM2YiJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzYxMDEwODc3fV0sInNlc3Npb25faWQiOiIxZmI3MDIyOC1hNjIzLTRkNTMtYmFkNS01MDMxY2ZhZDg2MWEiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.ixR-tfEAp9Znd44WnWDS60abCKf53wawk0N0-lG1Phg"
+
+        refresh_token = "m74jppfdlqze"
         # Initialize Gemini service for this user
         gemini_service = GeminiService()
 
@@ -58,8 +61,8 @@ async def chat_completion(
             message=request.message,
             conversation_id=request.conversation_id,
             user_id=user_id,
-            # Note: excel_function_search and hybrid_search are called internally
-            # We're exposing control flags for frontend configuration
+            access_token=access_token,
+            refresh_token=refresh_token
         )
 
         # Extract search results for transparency (optional)
@@ -77,7 +80,7 @@ async def chat_completion(
         )
 
     except Exception as e:
-        logger.error(f"Chat completion failed for user {user_id}: {e}", exc_info=True)
+        logger.error(f"Chat completion failed for user {user_id}: %s",e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Chat completion failed: {str(e)}"

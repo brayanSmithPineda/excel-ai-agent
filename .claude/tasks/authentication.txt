@@ -1,0 +1,105 @@
+  🔐 Your Question About Token Management (VERY IMPORTANT!)
+
+  You're absolutely right to question this! In a real production system, you DON'T manually pass tokens in every request. Here's how it actually    
+   works:
+
+  How Production Authentication Works:
+
+  1. User Logs In Once (Frontend)
+  // User enters email/password in Excel Add-in
+  const { data } = await supabase.auth.signInWithPassword({
+    email: 'user@example.com',
+    password: 'password123'
+  })
+
+  // Save tokens in Office.js settings (encrypted storage)
+  Office.context.document.settings.set('access_token', data.session.access_token)
+  Office.context.document.settings.set('refresh_token', data.session.refresh_token)
+  await Office.context.document.settings.saveAsync()
+
+  2. Frontend Sends Token with Every Request
+  // In your apiService.ts (frontend)
+  const getAuthToken = () => {
+    return Office.context.document.settings.get('access_token')
+  }
+
+  // Every API call includes the token
+  fetch('http://localhost:8000/api/v1/chat/completion', {
+    headers: {
+      'Authorization': `Bearer ${getAuthToken()}`,  // ← Token in header
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ message: "What is VLOOKUP?" })
+  })
+
+  3. Backend Extracts Token from Header (Using get_current_user dependency)
+  # In backend/app/auth/dependencies.py (already exists!)
+  def get_current_user(authorization: str = Header(None)):
+      """Extract user from JWT token in Authorization header"""
+      token = authorization.replace('Bearer ', '')
+      # Validate token and get user_id
+      user = validate_jwt_token(token)
+      return user
+
+  4. Backend Uses Token Automatically
+  # In chat.py - NO manual token passing needed!
+  @router.post("/completion")
+  async def chat_completion(
+      request: ChatRequest,
+      current_user: dict = Depends(get_current_user)  # ← Auto extracts from header
+  ):
+      user_id = current_user["user_id"]
+      access_token = current_user["access_token"]
+
+      # GeminiService uses the token automatically
+      result = await gemini_service.chat_completion(
+          message=request.message,
+          user_id=user_id,
+          access_token=access_token  # From authenticated user
+      )
+
+  ---
+  🎯 So What Are We Doing Now vs Production?
+
+  NOW (Testing - Manual Tokens):
+
+  # TEMPORARY for testing
+  user_id = "c43c4b4a-..."
+  access_token = "hardcoded-token-from-test-script"
+
+  PRODUCTION (Automatic):
+
+  # PRODUCTION - Get from JWT in Authorization header
+  current_user = Depends(get_current_user)
+  user_id = current_user["user_id"]
+  access_token = current_user["access_token"]
+
+  ---
+  ✅ The Right Approach:
+
+  For NOW (to test the chat endpoint):
+  1. Run the test script to get tokens once
+  2. Use those tokens temporarily in your code
+  3. This proves the RLS + session authentication works
+
+  For LATER (production):
+  1. Uncomment current_user: dict = Depends(get_current_user) in chat.py
+  2. Frontend sends token in Authorization: Bearer TOKEN header
+  3. Backend automatically extracts and uses it
+
+  CHECK THE CHANGES MADE TO AUTHENTICATION IN THE AI_EXECUTOR.
+
+  i update the schemas/chat.py, the api/v1/chat.py
+$body = @{
+    message = "What is VLOOKUP?"
+    conversation_id = $null
+    enable_semantic_search = $true
+    enable_excel_search = $true
+    enable_hybrid_search = $true
+    access_token = "eyJhbGciOiJIUzI1NiIsImtpZCI6IlpSMmdFbHhvdklRSlBUcTMiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2Jqc2NkbmNoaG5wc3RrYmNtcGt1LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzZmRjMTllZi03NWViLTQ2MGItYTliMS1lYmM1YjViODQzNmIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzYwOTY4NTc3LCJpYXQiOjE3NjA5NjQ5NzcsImVtYWlsIjoidGVzdHVzZXJAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbCI6InRlc3R1c2VyQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6IjNmZGMxOWVmLTc1ZWItNDYwYi1hOWIxLWViYzViNWI4NDM2YiJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzYwOTY0OTc3fV0sInNlc3Npb25faWQiOiJiN2VjZmQzNy1iYmRhLTQ0ZWUtODBkOC0zNGVmOTM3ZDY5NjYiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.cv6aAyPXUMSJrOuWBj0qgGdqYriydqLXgKv23qPd5JU"
+    refresh_token = "ujk2b2kuonsv"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8000/api/v1/chat/completion" -Method Post -ContentType "application/json" -Body $body
+
+Need to resolve the certifacates issues now im using mkcert for testing but we can not use that anymore.

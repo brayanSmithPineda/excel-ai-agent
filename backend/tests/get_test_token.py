@@ -6,22 +6,36 @@ from supabase import create_client, Client
 async def get_jwt_token():
     supabase = get_supabase_client()
     try:
-        password = input("Enter your password:")
-
+        """
         response = supabase.auth.sign_in_with_password(
             {
-                "email": "pinedab606@gmail.com",
-                "password": password
+                "email": " pinedab606@gmail.com",
+                "password": "0semeolvidO+"
             }
         )
+        """
 
-        if response.user and response.session:
-            print("JWT token obtained successfully")
-            print(f"\n🧪 Test command:")
-            print(f'curl -H "Authorization: Bearer {response.session.access_token}" http://localhost:8000/test/jwt')
-            return response.session.access_token
-        else:
-            print("Failed to get JWT token")
+        #Try to create a new user if it does not exists
+        EMAIL = "testuser@gmail.com"
+        PASSWORD = "mc%k>5?^Eshki48"
+        try:
+            signup_response = supabase.auth.sign_up({
+                "email": EMAIL,
+                "password": PASSWORD
+            })
+        except Exception as e:
+            print(f"user might already exists: {e}")
+        
+        #Now try to log in
+        try:
+            response = supabase.auth.sign_in_with_password({
+                "email": EMAIL,
+                "password": PASSWORD
+            })
+            #print token
+            print(f"response: {response}")
+        except Exception as e:
+            print(f"loging error: {e}")
 
     except Exception as e:
         print(f"Error: {e}")
