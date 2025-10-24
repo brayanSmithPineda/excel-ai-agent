@@ -50,9 +50,7 @@ async def chat_completion(
         user_id = "3fdc19ef-75eb-460b-a9b1-ebc5b5b8436b"
         logger.info(f"Chat completion request from user {user_id}: {request.message[:50]}...")
 
-        access_token = "eyJhbGciOiJIUzI1NiIsImtpZCI6IlpSMmdFbHhvdklRSlBUcTMiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2Jqc2NkbmNoaG5wc3RrYmNtcGt1LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIzZmRjMTllZi03NWViLTQ2MGItYTliMS1lYmM1YjViODQzNmIiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzYxMDE0NDc3LCJpYXQiOjE3NjEwMTA4NzcsImVtYWlsIjoidGVzdHVzZXJAZ21haWwuY29tIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbCI6InRlc3R1c2VyQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6IjNmZGMxOWVmLTc1ZWItNDYwYi1hOWIxLWViYzViNWI4NDM2YiJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzYxMDEwODc3fV0sInNlc3Npb25faWQiOiIxZmI3MDIyOC1hNjIzLTRkNTMtYmFkNS01MDMxY2ZhZDg2MWEiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.ixR-tfEAp9Znd44WnWDS60abCKf53wawk0N0-lG1Phg"
-
-        refresh_token = "m74jppfdlqze"
+        # Using admin client for database operations - no authentication needed
         # Initialize Gemini service for this user
         gemini_service = GeminiService()
 
@@ -60,9 +58,7 @@ async def chat_completion(
         result = await gemini_service.chat_completion(
             message=request.message,
             conversation_id=request.conversation_id,
-            user_id=user_id,
-            access_token=access_token,
-            refresh_token=refresh_token
+            user_id=user_id
         )
 
         # Extract search results for transparency (optional)

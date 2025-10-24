@@ -36,6 +36,8 @@ class Settings(BaseSettings): #BaseSettings is a class that provides the basic f
     allowed_origins: List[str] = [
           "https://localhost:3000", #Development (HTTPS)
           "http://localhost:3000",  #Development (HTTP - temporary for testing)
+          "https://127.0.0.1:3000", #Development (HTTPS with IP)
+          "http://127.0.0.1:3000",  #Development (HTTP with IP)
           "https://excel.office.com", #Excel on the web
           "https://excel.officeapps.live.com" #Excel online
       ]

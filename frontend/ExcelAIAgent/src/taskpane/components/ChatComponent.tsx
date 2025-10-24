@@ -112,7 +112,7 @@ const ChatComponent: React.FC = () => {
 
         try {
             // Call chat API
-            const response = await fetch("https://localhost:8000/api/v1/chat/completion", {
+            const response = await fetch("https://127.0.0.1:8000/api/v1/chat/completion", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(poetry run uvicorn:*)",
+      "Bash(poetry run python:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

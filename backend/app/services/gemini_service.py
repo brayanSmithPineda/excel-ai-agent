@@ -8,6 +8,7 @@ from app.config.settings import settings
 from loguru import logger
 from app.config.database import get_supabase_client, get_supabase_admin_client
 from datetime import datetime
+import time
 import re
 
 if TYPE_CHECKING:
@@ -29,12 +30,13 @@ class GeminiService:
         client = genai.Client(api_key=settings.gemini_api_key.get_secret_value())
         self.client = client
         #Add Supabase for phase 1: Direct History (Pass last n messages to Gemini)
-        self.supabase = get_supabase_client()
+        # Use admin client to bypass RLS policies and have full database access
+        self.supabase = get_supabase_admin_client()
         #Add DynamicSymbolTable and ExcelFormulaParser for phase 3.3.4: HybridSearchIntegration (Finite + Infinite Search)
         self.symbol_table = DynamicSymbolTable()
         self.parser = ExcelFormulaParser()
     
-    async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None, access_token: str = None, refresh_token: str = None) -> str:
+    async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None) -> str:
         """
         Send a message to the Gemini API and return the response.
         Use , direct history, semantic search, and lexical search to answer the question.
@@ -43,8 +45,7 @@ class GeminiService:
             if not user_id:
                 raise Exception("User ID is required")
             
-            if access_token and refresh_token:
-                self.supabase.auth.set_session(access_token, refresh_token = refresh_token)
+            # Admin client has full database access - no need for user sessions
             
             #Add hybrid search for comprehensive context
             try:
@@ -108,8 +109,9 @@ class GeminiService:
             logger.info("Message enhanced with hybrid search context")#this is the message we past to the AI , it contains the user's current question and the relevant context from the past conversations
             
             if not conversation_id: #if no previous conversation, create a new one
-                #First create a new conversation in supabase, use the original message for the title
+                # Create new conversation in database (admin client has full access)
                 conversation_id = await self._create_new_chat(user_id, message)
+                logger.info(f"Created new conversation: {conversation_id}")
 
                 #Then create a new chat session (no history for a new chat)
                 chat = self.client.chats.create(
@@ -135,11 +137,10 @@ class GeminiService:
             #debugging: print the response
             logger.info(f"Response from Gemini API: {response}")
 
-            #Save the messages (user message and ai response) to supabase
+            # Always save messages and log interactions (admin client has full access)
             await self._append_messages(conversation_id, message, response.text)
-
-            #Ardd audit log to track the interaction in audit_logs table in supabase
             await self._log_ai_interaction(user_id, conversation_id, message, response.text)
+            logger.info(f"Saved conversation and audit log for user {user_id}")
 
             return {
                 "ai_response": response.text,
@@ -542,6 +543,7 @@ class GeminiService:
         This method fetches the messages from Supabase and formats them for Gemini
         """
         try:
+            # Query database for conversation history (admin client has full access)
             #Phase1: Query ai_conversations to get the messages
             conversation = self.supabase.table('ai_conversations').select('messages').eq('id', conversation_id).single().execute()
 

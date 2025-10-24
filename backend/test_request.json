@@ -1,0 +1,7 @@
+{
+  "message": "Hello, can you help me with Excel?",
+  "conversation_id": null,
+  "enable_semantic_search": true,
+  "enable_excel_search": true,
+  "enable_hybrid_search": true
+}

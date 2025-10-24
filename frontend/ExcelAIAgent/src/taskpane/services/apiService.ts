@@ -49,8 +49,8 @@ operationType?: string;
 // CONFIGURATION - BACKEND API URL
 //===========================================
 
-// ✅ Using HTTPS with mkcert-generated certificates (trusted by system)
-const API_BASE_URL = 'https://localhost:8000';
+// ✅ Using HTTPS with mkcert certificates (trusted SSL)
+const API_BASE_URL = 'https://127.0.0.1:8000';
 const AI_EXECUTOR_ENDPOINT = `${API_BASE_URL}/api/v1/ai-executor/execute-task`;
 
 //===========================================
