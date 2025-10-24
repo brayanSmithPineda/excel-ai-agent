@@ -7,6 +7,8 @@ import TextInsertion from "./TextInsertion"; // Component for interacting with E
 import ExcelReader from "./ExcelReader"; // Component for testing Excel operations (Day 2 Frontend)
 import AIExecutor from "./AIExecutor"; // Component for the AI executor
 import ChatComponent from "./ChatComponent"; // Component for the chat interface
+import { LoginComponent } from "./LoginComponent"; // Component for authentication
+import { AuthProvider, useAuth } from "../../contexts/AuthContext"; // Authentication context
 
 import { makeStyles } from "@fluentui/react-components";
 
@@ -34,8 +36,10 @@ const useStyles = makeStyles({
   },
 });
 
-const App: React.FC<AppProps> = (props: AppProps) => {
+// AppContent component that handles authentication state
+const AppContent: React.FC<AppProps> = (props: AppProps) => {
   const styles = useStyles();
+  const { user, loading, signOut } = useAuth();
   
   const listItems: HeroListItem[] = [
     {
@@ -52,29 +56,59 @@ const App: React.FC<AppProps> = (props: AppProps) => {
     },
   ];
 
-  // This creates the visual layout that users see in the Excel task pane
+  // Show loading state
+  if (loading) {
+    return (
+      <div className={styles.root} style={{ textAlign: 'center', padding: '50px' }}>
+        <div>Loading...</div>
+      </div>
+    );
+  }
+
+  // Show login form if not authenticated
+  if (!user) {
+    return (
+      <div className={styles.root}>
+        <Header 
+          logo="assets/logo-filled.png" 
+          title={props.title} 
+          message="Welcome to your AI Assistant" 
+        />
+        <LoginComponent />
+      </div>
+    );
+  }
+
+  // Show main app if authenticated
   return (
     <div className={styles.root}>
       <Header 
         logo="assets/logo-filled.png" 
         title={props.title} 
-        message="Welcome to your AI Assistant" 
+        message={`Welcome, ${user.email}`} 
       />
+      
+      {/* Logout button */}
+      <div style={{ textAlign: 'right', marginBottom: '10px' }}>
+        <button 
+          onClick={signOut}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#d32f2f',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Logout
+        </button>
+      </div>
       
       <HeroList
         message="Secure AI assistance for your Excel workflows!"
         items={listItems}
       />
-      {/*
-        ExcelReader component - Day 2 Frontend: Test Excel operations
-        This component tests our excel_operations.ts service by reading data from Excel
-        <ExcelReader />
-
-        TextInsertion component provides basic Excel interaction
-        This will be replaced with our chat interface and AI features
-        insertText function handles the actual Office.js API calls
-        <TextInsertion insertText={insertText} />
-      */}
       
       {/* AIExecutor component */}
       <AIExecutor />
@@ -82,6 +116,15 @@ const App: React.FC<AppProps> = (props: AppProps) => {
       {/* ChatComponent component */}
       <ChatComponent />
     </div>
+  );
+};
+
+// Main App component with AuthProvider
+const App: React.FC<AppProps> = (props: AppProps) => {
+  return (
+    <AuthProvider>
+      <AppContent {...props} />
+    </AuthProvider>
   );
 };
 

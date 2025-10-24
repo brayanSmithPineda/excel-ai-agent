@@ -4,6 +4,8 @@
  * Handles all HTTP requests to the FastAPI backend for AI code execution.
  */
 
+import { supabase } from '../../lib/supabaseClient'
+
 // ============================================================================
 // TYPE DEFINITIONS - Match backend Pydantic schemas
 // ============================================================================
@@ -54,6 +56,102 @@ const API_BASE_URL = 'https://127.0.0.1:8000';
 const AI_EXECUTOR_ENDPOINT = `${API_BASE_URL}/api/v1/ai-executor/execute-task`;
 
 //===========================================
+// AUTHENTICATION HELPERS
+//===========================================
+
+// Helper to get current access token
+async function getAccessToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token || null
+}
+
+// Helper to make authenticated requests
+async function makeAuthenticatedRequest(url: string, options: RequestInit): Promise<Response> {
+  const token = await getAccessToken()
+  
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (response.status === 401) {
+    // Token expired - try to refresh
+    const { data: { session } } = await supabase.auth.refreshSession()
+    
+    if (session?.access_token) {
+      // Retry with new token
+      return await fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+    }
+    
+    throw new Error('Session expired - please login again')
+  }
+
+    return response
+}
+
+//===========================================
+// CHAT API FUNCTIONS
+//===========================================
+
+export interface ChatRequest {
+    message: string;
+    conversation_id?: string | null;
+    enable_semantic_search?: boolean;
+    enable_excel_search?: boolean;
+    enable_hybrid_search?: boolean;
+}
+
+export interface ChatResponse {
+    ai_response: string;
+    conversation_id: string;
+    search_results?: any;
+}
+
+export async function sendChatMessage(
+    message: string,
+    conversationId: string | null
+): Promise<ChatResponse> {
+    const token = await getAccessToken()
+    
+    if (!token) {
+        throw new Error('Not authenticated')
+    }
+
+    const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v1/chat/completion`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            message,
+            conversation_id: conversationId,
+            enable_semantic_search: true,
+            enable_excel_search: true,
+            enable_hybrid_search: true
+        })
+    })
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    return await response.json()
+}
+
+//===========================================
 // HELPER FUNCTIONS
 //===========================================
 /**
@@ -102,8 +200,8 @@ function getAuthToken(): string | null {
 
 export async function executeTask(request: ExecuteTaskRequest): Promise<AIExecutorResponse> {
     try {
-        //Step 1: Get the authentication token
-        const token = getAuthToken();
+        //Step 1: Get the authentication token from Supabase
+        const token = await getAccessToken();
         if (!token) {
             return {
                 success: false,
@@ -131,12 +229,9 @@ export async function executeTask(request: ExecuteTaskRequest): Promise<AIExecut
             });
         }
 
-        //Step 3: Make the API call
-        const response = await fetch(AI_EXECUTOR_ENDPOINT, {
+        //Step 3: Make the API call with authentication
+        const response = await makeAuthenticatedRequest(AI_EXECUTOR_ENDPOINT, {
             method: "POST",
-            headers: {
-                "Authorization": `Bearer ${token}`
-            },
             body: formData
         });
 

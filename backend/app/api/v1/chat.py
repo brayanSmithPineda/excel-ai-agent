@@ -6,7 +6,7 @@ Includes semantic search, Excel function search, and hybrid search capabilities.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from loguru import logger
 
 from app.auth.dependencies import get_current_user
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 @router.post("/completion", response_model=ChatResponse)
 async def chat_completion(
     request: ChatRequest,
-    #current_user: UserProfile = Depends(get_current_user) #Desable for testing
+    current_user: Dict[str, Any] = Depends(get_current_user)  # ✅ Enable JWT validation
 ):
     """
     Main chat completion endpoint with intelligent search
@@ -46,9 +46,9 @@ async def chat_completion(
         ChatResponse with AI response and conversation ID
     """
     try:
-        #Tempoary: Use a fixed user id for testing
-        user_id = "3fdc19ef-75eb-460b-a9b1-ebc5b5b8436b"
-        logger.info(f"Chat completion request from user {user_id}: {request.message[:50]}...")
+        # Extract user_id from validated JWT token
+        user_id = current_user.get("sub") or current_user.get("user_id")
+        logger.info(f"Chat completion request from authenticated user {user_id}: {request.message[:50]}...")
 
         # Using admin client for database operations - no authentication needed
         # Initialize Gemini service for this user

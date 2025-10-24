@@ -1109,3 +1109,673 @@ Same architecture, but:
 This is the industry-standard approach used by professional teams! 🚀
 
 Would you like me to create a detailed implementation plan for this approach?
+# Implement Real Supabase Authentication (Production-Ready)
+
+## Overview
+
+Add JWT-based authentication to the Excel AI Agent using Supabase Auth. Frontend will implement login/signup and send JWT tokens, backend will validate tokens and extract user_id, while maintaining service role for database operations.
+
+## Current State
+
+### What We Have
+
+- ✅ **Backend auth infrastructure** (`auth/jwt_handler.py`, `auth/dependencies.py`)
+- ✅ **Service role for database** (admin client bypasses RLS)
+- ✅ **Hardcoded test user_id** for development
+
+### What's Missing
+
+- ❌ **Frontend authentication** (login, signup, session management)
+- ❌ **JWT token sending** (Authorization header)
+- ❌ **Backend JWT validation** (enabled in endpoints)
+- ❌ **User registration flow**
+
+## Architecture Overview
+
+```
+Frontend                    Backend                      Supabase
+   ↓                          ↓                             ↓
+User Login        →    Validates JWT Token      Uses Admin Client
+Gets JWT Token         Extracts user_id     →   Full DB Access
+Sends in Header        From validated JWT       (Service Role)
+```
+
+**Key Points:**
+
+- Frontend authenticates with Supabase directly
+- Frontend sends JWT in Authorization header
+- Backend validates JWT, extracts user_id
+- Backend uses admin client for ALL database operations
+- User context maintained via validated user_id
+
+## Phase 1: Backend - Enable JWT Validation
+
+### 1.1 Update Chat Endpoint to Require Authentication
+
+**File:** `backend/app/api/v1/chat.py`
+
+**Current (line 48-51):**
+
+```python
+@router.post("/completion", response_model=ChatResponse)
+async def chat_completion(
+    request: ChatRequest,
+    #current_user: UserProfile = Depends(get_current_user) #Disabled for testing
+):
+    try:
+        #Temporary: Use a fixed user id for testing
+        user_id = "3fdc19ef-75eb-460b-a9b1-ebc5b5b8436b"
+```
+
+**Change to:**
+
+```python
+@router.post("/completion", response_model=ChatResponse)
+async def chat_completion(
+    request: ChatRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)  # ✅ Enable JWT validation
+):
+    try:
+        # Extract user_id from validated JWT token
+        user_id = current_user.get("sub") or current_user.get("user_id")
+        logger.info(f"Chat completion request from authenticated user {user_id}")
+```
+
+**Impact:** Chat endpoint now requires valid JWT token
+
+### 1.2 Update AI Executor Endpoint (if exists)
+
+**File:** `backend/app/api/v1/ai_executor.py`
+
+**Add authentication:**
+
+```python
+from app.auth.dependencies import get_current_user
+from typing import Dict, Any
+from fastapi import Depends
+
+@router.post("/execute-task")
+async def execute_task(
+    request: AIExecutorRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)  # ✅ Add auth
+):
+    user_id = current_user.get("sub") or current_user.get("user_id")
+    # ... rest of the code
+```
+
+### 1.3 Keep Health Check Public
+
+**File:** `backend/app/main.py`
+
+**Ensure health check remains unauthenticated:**
+
+```python
+@app.get("/health")
+async def health_check():
+    # No authentication required - public endpoint
+    return {"status": "healthy"}
+```
+
+### 1.4 Test Backend JWT Validation
+
+**Create test script:** `backend/test_auth.py`
+
+```python
+import requests
+from supabase import create_client
+
+# 1. Login to get JWT token
+supabase = create_client("YOUR_SUPABASE_URL", "YOUR_ANON_KEY")
+auth_response = supabase.auth.sign_in_with_password({
+    "email": "test@example.com",
+    "password": "test-password"
+})
+token = auth_response.session.access_token
+
+# 2. Test authenticated request
+response = requests.post(
+    "https://127.0.0.1:8000/api/v1/chat/completion",
+    headers={"Authorization": f"Bearer {token}"},
+    json={"message": "Hello", "conversation_id": null}
+)
+print(response.json())
+```
+
+## Phase 2: Frontend - Implement Supabase Auth
+
+### 2.1 Install Supabase Client
+
+**File:** `frontend/ExcelAIAgent/package.json`
+
+```bash
+npm install @supabase/supabase-js
+```
+
+### 2.2 Create Supabase Client
+
+**File:** `frontend/ExcelAIAgent/src/lib/supabaseClient.ts` (new file)
+
+```typescript
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 'YOUR_SUPABASE_URL'
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || 'YOUR_ANON_KEY'
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+```
+
+### 2.3 Create Authentication Context
+
+**File:** `frontend/ExcelAIAgent/src/contexts/AuthContext.tsx` (new file)
+
+```typescript
+import React, { createContext, useContext, useState, useEffect } from 'react'
+import { supabase } from '../lib/supabaseClient'
+import { User, Session } from '@supabase/supabase-js'
+
+interface AuthContextType {
+  user: User | null
+  session: Session | null
+  signIn: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string) => Promise<void>
+  signOut: () => Promise<void>
+  loading: boolean
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+    if (error) throw error
+  }
+
+  const signUp = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+    })
+    if (error) throw error
+  }
+
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, session, signIn, signUp, signOut, loading }}>
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
+}
+```
+
+### 2.4 Create Login Component
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/LoginComponent.tsx` (new file)
+
+```typescript
+import * as React from 'react'
+import { useAuth } from '../../contexts/AuthContext'
+
+export const LoginComponent: React.FC = () => {
+  const [email, setEmail] = React.useState('')
+  const [password, setPassword] = React.useState('')
+  const [isSignUp, setIsSignUp] = React.useState(false)
+  const [error, setError] = React.useState('')
+  const [loading, setLoading] = React.useState(false)
+  
+  const { signIn, signUp } = useAuth()
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      if (isSignUp) {
+        await signUp(email, password)
+      } else {
+        await signIn(email, password)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="login-container">
+      <h2>{isSignUp ? 'Sign Up' : 'Sign In'}</h2>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        {error && <div className="error">{error}</div>}
+        <button type="submit" disabled={loading}>
+          {loading ? 'Loading...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+        </button>
+      </form>
+      <button onClick={() => setIsSignUp(!isSignUp)}>
+        {isSignUp ? 'Already have an account? Sign In' : 'Need an account? Sign Up'}
+      </button>
+    </div>
+  )
+}
+```
+
+### 2.5 Update App Component to Use Auth
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/App.tsx`
+
+**Wrap with AuthProvider:**
+
+```typescript
+import { AuthProvider, useAuth } from '../../contexts/AuthContext'
+import { LoginComponent } from './LoginComponent'
+
+function AppContent() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return <div>Loading...</div>
+  }
+
+  if (!user) {
+    return <LoginComponent />
+  }
+
+  return (
+    // Your existing app content
+    <div>
+      <AIExecutorComponent />
+      <ChatComponent />
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  )
+}
+```
+
+### 2.6 Update API Service to Send JWT Token
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/services/apiService.ts`
+
+**Update to include Authorization header:**
+
+```typescript
+import { supabase } from '../../lib/supabaseClient'
+
+// Helper to get current access token
+async function getAccessToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token || null
+}
+
+// Update chat completion call
+export async function sendChatMessage(
+  message: string,
+  conversationId: string | null
+): Promise<ChatResponse> {
+  const token = await getAccessToken()
+  
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/chat/completion`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`  // ✅ Add JWT token
+    },
+    body: JSON.stringify({
+      message,
+      conversation_id: conversationId,
+      enable_semantic_search: true,
+      enable_excel_search: true,
+      enable_hybrid_search: true
+    })
+  })
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+  }
+
+  return await response.json()
+}
+```
+
+### 2.7 Update ChatComponent to Use New API Service
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/ChatComponent.tsx`
+
+**Replace direct fetch with service:**
+
+```typescript
+import { sendChatMessage } from '../services/apiService'
+
+const handleSendMessage = async () => {
+  if (!input.trim()) return
+
+  try {
+    setIsLoading(true)
+    
+    // Use the API service (includes JWT automatically)
+    const result = await sendChatMessage(input, conversationId)
+    
+    // Update UI with response
+    setMessages([
+      ...messages,
+      { role: 'user', content: input },
+      { role: 'assistant', content: result.ai_response }
+    ])
+    
+    setConversationId(result.conversation_id)
+    setInput('')
+  } catch (error) {
+    console.error('Chat error:', error)
+    setError(error.message)
+  } finally {
+    setIsLoading(false)
+  }
+}
+```
+
+## Phase 3: Environment Configuration
+
+### 3.1 Backend Environment Variables
+
+**File:** `backend/.env`
+
+**Ensure these are set:**
+
+```env
+# Supabase Configuration
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# JWT Configuration (from Supabase Dashboard → Settings → API → JWT Secret)
+JWT_SECRET_KEY=your-jwt-secret
+JWT_ALGORITHM=HS256
+```
+
+### 3.2 Frontend Environment Variables
+
+**File:** `frontend/ExcelAIAgent/.env` (new file)
+
+```env
+REACT_APP_SUPABASE_URL=https://your-project.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your-anon-key
+```
+
+**Add to `.gitignore`:**
+
+```
+frontend/ExcelAIAgent/.env
+```
+
+## Phase 4: Create Test User in Supabase
+
+### 4.1 Via Supabase Dashboard
+
+1. Go to **Authentication → Users**
+2. Click **Add User**
+3. Enter email: `test@example.com`
+4. Set password: `TestPassword123!`
+5. **Auto Confirm User**: ✅ (check this)
+
+### 4.2 Via Code (Alternative)
+
+**Create script:** `backend/create_test_user.py`
+
+```python
+from supabase import create_client
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+supabase = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Admin key
+)
+
+# Create test user
+result = supabase.auth.admin.create_user({
+    "email": "test@example.com",
+    "password": "TestPassword123!",
+    "email_confirm": True
+})
+
+print(f"User created: {result.user.id}")
+```
+
+## Phase 5: Testing Authentication Flow
+
+### 5.1 Test Backend JWT Validation
+
+**Terminal 1 - Start Backend:**
+
+```bash
+cd backend
+poetry run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 \
+  --ssl-keyfile=ssl/localhost+2-key.pem \
+  --ssl-certfile=ssl/localhost+2.pem
+```
+
+**Terminal 2 - Test with curl:**
+
+```bash
+# 1. Get JWT token (you'll need to login via frontend or get from Supabase Dashboard)
+TOKEN="your-jwt-token-here"
+
+# 2. Test authenticated request
+curl -X POST https://127.0.0.1:8000/api/v1/chat/completion \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"message": "Hello", "conversation_id": null}'
+
+# 3. Test unauthenticated request (should fail)
+curl -X POST https://127.0.0.1:8000/api/v1/chat/completion \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello", "conversation_id": null}'
+```
+
+### 5.2 Test Frontend Authentication
+
+1. Start frontend: `npm run dev-server`
+2. Open `https://localhost:3000/taskpane.html`
+3. Should see **Login form** (not chat)
+4. Enter: `test@example.com` / `TestPassword123!`
+5. Click **Sign In**
+6. Should see **main app** (chat + AI executor)
+7. Send chat message
+8. Verify it works with authentication
+
+### 5.3 Test in Excel
+
+1. **Sideload add-in** with manifest.xml
+2. Open task pane
+3. Should see **login form**
+4. Login with test credentials
+5. Test all features
+
+## Phase 6: Handle Edge Cases
+
+### 6.1 Token Expiration Handling
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/services/apiService.ts`
+
+```typescript
+async function makeAuthenticatedRequest(url: string, options: RequestInit) {
+  const token = await getAccessToken()
+  
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (response.status === 401) {
+    // Token expired - try to refresh
+    const { data: { session } } = await supabase.auth.refreshSession()
+    
+    if (session?.access_token) {
+      // Retry with new token
+      return await fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+    }
+    
+    throw new Error('Session expired - please login again')
+  }
+
+  return response
+}
+```
+
+### 6.2 Logout Functionality
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/App.tsx`
+
+```typescript
+import { useAuth } from '../../contexts/AuthContext'
+
+function AppContent() {
+  const { user, signOut } = useAuth()
+
+  return (
+    <div>
+      <div className="header">
+        <span>Welcome, {user?.email}</span>
+        <button onClick={signOut}>Logout</button>
+      </div>
+      {/* Rest of app */}
+    </div>
+  )
+}
+```
+
+## Phase 7: Production Checklist
+
+### 7.1 Security
+
+- ✅ JWT secret is strong and never committed
+- ✅ Service role key only in backend (never frontend)
+- ✅ HTTPS enabled in production
+- ✅ CORS configured for production domain
+- ✅ Rate limiting enabled (optional but recommended)
+
+### 7.2 User Experience
+
+- ✅ Login/logout flow working
+- ✅ Token refresh handling
+- ✅ Error messages user-friendly
+- ✅ Loading states during authentication
+- ✅ Remember user session (auto-login)
+
+### 7.3 Testing
+
+- ✅ Test with valid JWT token
+- ✅ Test with expired token
+- ✅ Test with invalid token
+- ✅ Test without token (401 error)
+- ✅ Test token refresh flow
+
+## Success Criteria
+
+### Backend
+
+- ✅ JWT validation enabled on protected endpoints
+- ✅ User ID extracted from validated token
+- ✅ Service role still used for database operations
+- ✅ Proper error handling for invalid tokens
+
+### Frontend
+
+- ✅ Login/signup UI implemented
+- ✅ JWT token sent with all API requests
+- ✅ Auth state managed globally
+- ✅ Automatic token refresh
+- ✅ Logout functionality
+
+### End-to-End
+
+- ✅ User can sign up
+- ✅ User can login
+- ✅ Chat works with authentication
+- ✅ AI executor works with authentication
+- ✅ Conversations saved per user
+- ✅ User can logout
+
+## Benefits
+
+1. **Security**: Only authenticated users can access the API
+2. **User Isolation**: Each user sees only their own data

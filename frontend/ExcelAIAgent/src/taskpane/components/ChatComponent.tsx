@@ -9,6 +9,8 @@
  * Separate from AIExecutor which focuses on code execution
  */
 
+import { sendChatMessage } from '../services/apiService'
+
 import * as React from "react";
 import { useState } from "react";
 import {
@@ -111,38 +113,19 @@ const ChatComponent: React.FC = () => {
         setIsLoading(true);
 
         try {
-            // Call chat API
-            const response = await fetch("https://127.0.0.1:8000/api/v1/chat/completion", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${getAuthToken()}` // TODO: Implement auth
-                },
-                body: JSON.stringify({
-                    message: input,
-                    conversation_id: conversationId,
-                    enable_semantic_search: true,
-                    enable_excel_search: true,
-                    enable_hybrid_search: true
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-
-            const data: ChatResponse = await response.json();
+            // Call chat API using the new service
+            const result = await sendChatMessage(input, conversationId);
 
             // Add AI response to UI
             const aiMessage: Message = {
                 role: "ai",
-                content: data.ai_response,
+                content: result.ai_response,
                 timestamp: new Date()
             };
             setMessages(prev => [...prev, aiMessage]);
 
             // Save conversation ID for continuity
-            setConversationId(data.conversation_id);
+            setConversationId(result.conversation_id);
 
         } catch (error) {
             console.error("Chat error:", error);
