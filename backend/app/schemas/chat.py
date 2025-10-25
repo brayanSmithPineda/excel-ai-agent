@@ -40,7 +40,20 @@ class ChatResponse(BaseModel):
         search_results: Context found from searches (for transparency)
         tokens_used: Token count for billing/monitoring
     """
-    ai_response: str
-    conversation_id: str
-    search_results: Optional[Dict] = Field(None, description="Search context used")
+    ai_response: str = Field(description="AI's natural language response")
+    conversation_id: str = Field(description="Conversation ID for continuity")
+    
+    # NEW: Code execution fields
+    executed_code: bool = Field(default=False, description="Whether code was executed")
+    code_output: Optional[str] = Field(None, description="Output from code execution")
+    output_files: Optional[Dict[str, str]] = Field(None, description="Generated files (base64)")
+    execution_reason: Optional[str] = Field(None, description="Why code was executed")
+    
+    # NEW: MEDIUM_RISK permission handling
+    requires_permission: Optional[bool] = Field(None, description="Code needs user approval")
+    risk_level: Optional[str] = Field(None, description="Risk level: low/medium/high")
+    code_preview: Optional[str] = Field(None, description="Code to review before approval")
+    
+    # Search context (existing)
+    search_results: Optional[Dict[str, Any]] = Field(None, description="Search results used")
     tokens_used: Optional[int] = Field(None, description="Estimated tokens")

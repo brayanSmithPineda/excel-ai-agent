@@ -11,6 +11,55 @@ from datetime import datetime
 import time
 import re
 
+# Define tool for code execution
+CODE_EXECUTION_TOOL = types.Tool(
+    function_declarations=[
+        types.FunctionDeclaration(
+            name="execute_python_code",
+            description="""EXECUTE PYTHON CODE when the user wants you to PERFORM an action with real data or files.
+
+🔥 ALWAYS use this tool when user says:
+- "create", "generate", "make", "build" → a file, spreadsheet, dataset
+- "calculate", "compute", "sum", "count", "analyze" → numbers or data
+- "process", "transform", "combine", "merge", "stack" → files or data
+- "write", "save", "export", "output" → results to a file
+- "run code", "execute", "perform" → any computation
+
+❌ NEVER use for:
+- "how do I...", "what is...", "explain..." → Just explain, don't execute
+- "show me an example of..." → Provide example code, don't run it
+- Simple Excel formula questions → Answer directly
+
+💡 KEY RULE: If user wants RESULTS (files, calculations, data), execute code. If user wants KNOWLEDGE (explanations, concepts), just explain.
+
+Available libraries: pandas, openpyxl, numpy, pathlib
+Input files location: /tmp/input/
+Output files location: /tmp/output/
+
+⚠️ IMPORTANT: Each execution is isolated. If you need to modify data from a previous execution, 
+you must regenerate the data with the modifications. Do NOT try to read files from previous executions.""",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "code": types.Schema(
+                        type=types.Type.STRING,
+                        description="Complete, runnable Python code using pandas/openpyxl. Must save outputs to /tmp/output/"
+                    ),
+                    "reason": types.Schema(
+                        type=types.Type.STRING,
+                        description="One sentence explaining what the code will do (e.g., 'Generate Excel file with 10 rows of sales data')"
+                    ),
+                    "expects_file_output": types.Schema(
+                        type=types.Type.BOOLEAN,
+                        description="True if code generates downloadable Excel/CSV files"
+                    )
+                },
+                required=["code", "reason"]
+            )
+        )
+    ]
+)
+
 if TYPE_CHECKING:
     from google.genai.chats import Chat
 
@@ -36,32 +85,24 @@ class GeminiService:
         self.symbol_table = DynamicSymbolTable()
         self.parser = ExcelFormulaParser()
     
-    async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None) -> str:
+    async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None) -> Dict[str, Any]:
         """
-        Send a message to the Gemini API and return the response.
-        Use , direct history, semantic search, and lexical search to answer the question.
+        Unified handler for conversational and code execution requests.
+        Uses Gemini function calling to automatically decide which to use.
         """
         try:
             if not user_id:
                 raise Exception("User ID is required")
             
-            # Admin client has full database access - no need for user sessions
-            
-            #Add hybrid search for comprehensive context
+            # Step 1: Perform intelligent search (EXISTING - keep this!)
             try:
-                # NEW: Use complete hybrid search for comprehensive context
                 logger.info(f"Starting hybrid search for user message: {message}")
-
-                # Create Excel context if available (this would come from the Excel add-in in real usage)
-                # For now, we'll use a default context, but in production this comes from the frontend
-                excel_context = ExcelContext(sheet_name="Sheet1")  # This would be passed from Excel add-in
-
-                # Get comprehensive search results using all three strategies
+                excel_context = ExcelContext(sheet_name="Sheet1")
                 hybrid_results = await self.hybrid_lexical_search(
                     query=message,
                     user_id=user_id,
-                    excel_context=excel_context,  # Excel add-in would provide this
-                    limit=8  # Get more results since we have three search types
+                    excel_context=excel_context,
+                    limit=8
                 )
 
                 # Build enhanced context from all search results
@@ -89,15 +130,16 @@ class GeminiService:
                 # Combine all context
                 if context_parts:
                     relevant_context = "\n".join(context_parts)
-                    logger.info(f"Enhanced context built with {len(context_parts)} context pieces from {len(hybrid_results['search_metadata']['search_strategies'])} search strategies")
+                    logger.info(f"Enhanced context built with {len(context_parts)} context pieces")
                 else:
                     logger.info("No relevant context found from hybrid search")
 
             except Exception as e:
                 logger.warning(f"Hybrid search failed, falling back to basic message: {e}")
                 relevant_context = ""
+                hybrid_results = {'finite_search_results': [], 'infinite_search_results': [], 'semantic_search_results': []}
 
-            # Enhanced message construction (replace existing enhanced_message logic)
+            # Step 2: Build enriched context
             enhanced_message = message
             if relevant_context:
                 enhanced_message = f"""User's current question: {message}
@@ -106,61 +148,183 @@ class GeminiService:
                 Please answer the current question using this context when helpful. If you reference Excel functions, explain how to use 
                 them. If you reference the user's workbook data, be specific about locations.
             """
-            logger.info("Message enhanced with hybrid search context")#this is the message we past to the AI , it contains the user's current question and the relevant context from the past conversations
             
-            if not conversation_id: #if no previous conversation, create a new one
-                # Create new conversation in database (admin client has full access)
+            # Step 3: Get or create conversation
+            if not conversation_id:
                 conversation_id = await self._create_new_chat(user_id, message)
                 logger.info(f"Created new conversation: {conversation_id}")
-
-                #Then create a new chat session (no history for a new chat)
                 chat = self.client.chats.create(
-                    model = "gemini-2.0-flash",
-                    config = types.GenerateContentConfig(
-                        system_instruction = "You are an excel expert that can answer questions and help with tasks. Use any provided context from the user's past conversations to give more personalized and relevant assistance.",
-                        response_mime_type = "text/plain",
-                        safety_settings= [
+                    model="gemini-2.0-flash",
+                    config=types.GenerateContentConfig(
+                        system_instruction="You are an excel expert that can answer questions and help with tasks. Use any provided context from the user's past conversations to give more personalized and relevant assistance.",
+                        response_mime_type="text/plain",
+                        safety_settings=[
                             types.SafetySetting(
                                 category='HARM_CATEGORY_HATE_SPEECH',
                                 threshold='BLOCK_ONLY_HIGH'
                             ),
-                        ]
+                        ],
+                        tools=[CODE_EXECUTION_TOOL]
                     ),
-                    history = None # no history for a new chatf
+                    history=None
                 )
-            else: #if there is a previous conversation, use it, this method is going to have the chat history
+            else:
                 chat = self._get_existing_chat(conversation_id)
 
-            #send_message is a method of the chat object, it contains the message to send and some metadata about the response.
+            # Step 4: Generate response WITH function calling enabled
             response = chat.send_message(enhanced_message)
 
-            #debugging: print the response
-            logger.info(f"Response from Gemini API: {response}")
+            # Step 5: Check if AI wants to execute code
+            function_call = None
+            if (response.candidates and 
+                len(response.candidates) > 0 and 
+                response.candidates[0].content and 
+                response.candidates[0].content.parts and 
+                len(response.candidates[0].content.parts) > 0 and
+                hasattr(response.candidates[0].content.parts[0], 'function_call') and 
+                response.candidates[0].content.parts[0].function_call):
+                function_call = response.candidates[0].content.parts[0].function_call
 
-            # Always save messages and log interactions (admin client has full access)
-            await self._append_messages(conversation_id, message, response.text)
-            await self._log_ai_interaction(user_id, conversation_id, message, response.text)
-            logger.info(f"Saved conversation and audit log for user {user_id}")
+            # Step 6: Handle function call (code execution)
+            if function_call and function_call.name == "execute_python_code":
+                logger.info(f"🔧 AI requested code execution: {function_call.args['reason']}")
+                
+                try:
+                    # Import AICodeExecutor
+                    from app.services.ai_executor.executor import AICodeExecutor
+                    
+                    # Execute code with full context
+                    executor = AICodeExecutor(user_id=user_id)
+                    execution_result = await executor.execute_with_generated_code(
+                        code=function_call.args["code"],
+                        context=hybrid_results,
+                        user_request=message
+                    )
+                    
+                    # Check if execution was successful
+                    if not execution_result.get("success", False):
+                        logger.error(f"Code execution failed: {execution_result.get('error', 'Unknown error')}")
+                        
+                        # Handle different failure types
+                        if execution_result.get("requires_permission"):
+                            # MEDIUM_RISK - return permission request
+                            await self._append_messages(
+                                conversation_id,
+                                message,
+                                f"I need your permission to execute this code: {execution_result.get('explanation', '')}"
+                            )
+                            
+                            return {
+                                "ai_response": f"I need your permission to execute this code: {execution_result.get('explanation', '')}",
+                                "conversation_id": conversation_id,
+                                "executed_code": False,
+                                "requires_permission": True,
+                                "risk_level": execution_result.get("risk_level"),
+                                "code_preview": execution_result.get("code_preview"),
+                                "search_results": {
+                                    "semantic_matches": len(hybrid_results.get('semantic_search_results', [])),
+                                    "excel_functions": len(hybrid_results.get('finite_search_results', [])),
+                                    "workbook_context": bool(hybrid_results.get('infinite_search_results', []))
+                                }
+                            }
+                        else:
+                            # HIGH_RISK or other failure - return error
+                            error_msg = f"Code execution failed: {execution_result.get('error', 'Unknown error')}"
+                            await self._append_messages(conversation_id, message, error_msg)
+                            
+                            return {
+                                "ai_response": error_msg,
+                                "conversation_id": conversation_id,
+                                "executed_code": False,
+                                "search_results": {
+                                    "semantic_matches": len(hybrid_results.get('semantic_search_results', [])),
+                                    "excel_functions": len(hybrid_results.get('finite_search_results', [])),
+                                    "workbook_context": bool(hybrid_results.get('infinite_search_results', []))
+                                }
+                            }
+                    
+                    # Execution was successful - send results back to AI for natural language response
+                    execution_summary = f"""
+                    Code execution completed.
+                    Output: {execution_result.get('output', 'No output')}
+                    Files generated: {list(execution_result.get('output_files', {}).keys())}
+                    """
+                    
+                    final_response = chat.send_message(
+                        f"The code execution results are: {execution_summary}. "
+                        f"Please provide a natural language summary to the user."
+                    )
+                    
+                    ai_response_text = final_response.candidates[0].content.parts[0].text
+                    
+                except Exception as e:
+                    logger.error(f"Error during code execution: {str(e)}", exc_info=True)
+                    
+                    # Return error response
+                    error_msg = f"Code execution failed due to an error: {str(e)}"
+                    await self._append_messages(conversation_id, message, error_msg)
+                    
+                    return {
+                        "ai_response": error_msg,
+                        "conversation_id": conversation_id,
+                        "executed_code": False,
+                        "search_results": {
+                            "semantic_matches": len(hybrid_results.get('semantic_search_results', [])),
+                            "excel_functions": len(hybrid_results.get('finite_search_results', [])),
+                            "workbook_context": bool(hybrid_results.get('infinite_search_results', []))
+                        }
+                    }
+                
+                # Save conversation
+                await self._append_messages(
+                    conversation_id,
+                    message,
+                    f"{ai_response_text}\n[Code executed: {function_call.args['reason']}]"
+                )
+                
+                return {
+                    "ai_response": ai_response_text,
+                    "conversation_id": conversation_id,
+                    "executed_code": True,
+                    "code_output": execution_result.get("output"),
+                    "output_files": execution_result.get("output_files"),
+                    "execution_reason": function_call.args["reason"],
+                    "search_results": {
+                        "semantic_matches": len(hybrid_results.get('semantic_search_results', [])),
+                        "excel_functions": len(hybrid_results.get('finite_search_results', [])),
+                        "workbook_context": bool(hybrid_results.get('infinite_search_results', []))
+                    }
+                }
+            
+            # Step 7: Handle conversational response (no code execution)
+            else:
+                # Defensive check for response structure
+                if (response.candidates and
+                    len(response.candidates) > 0 and
+                    response.candidates[0].content and
+                    response.candidates[0].content.parts and
+                    len(response.candidates[0].content.parts) > 0):
+                    ai_response_text = response.candidates[0].content.parts[0].text
+                else:
+                    logger.error(f"Invalid response structure from Gemini: {response}")
+                    raise Exception("Gemini returned an invalid response structure")
 
-            return {
-                "ai_response": response.text,
-                "conversation_id": conversation_id,
-                "semantic_context": hybrid_results.get('semantic_search_results', []),
-                "excel_functions": hybrid_results.get('finite_search_results', []),
-                "symbols": hybrid_results.get('infinite_search_results', []),
-                "tokens_used": self._estimate_tokens(response.text).total_tokens
-            }
+                # Save conversation
+                await self._append_messages(conversation_id, message, ai_response_text)
+                
+                return {
+                    "ai_response": ai_response_text,
+                    "conversation_id": conversation_id,
+                    "executed_code": False,
+                    "search_results": {
+                        "semantic_matches": len(hybrid_results.get('semantic_search_results', [])),
+                        "excel_functions": len(hybrid_results.get('finite_search_results', [])),
+                        "workbook_context": bool(hybrid_results.get('infinite_search_results', []))
+                    }
+                }
             
         except Exception as e:
-            logger.error(f"Error sending message to Gemini API: {e}")
-
-            #if user_id and conversation_id are available, log the failed interaction
-            if user_id and 'conversation_id' in locals() and conversation_id: #locals() is a built-in function that returns a dictionary of local variables
-                try:
-                    await self._log_failed_ai_interaction(user_id, conversation_id, message, str(e))
-                except Exception as e:
-                    pass
-
+            logger.error(f"Error in chat completion: {e}")
             raise e
     
     async def hybrid_lexical_search(self, query: str, user_id: str, excel_context: ExcelContext = None, limit: int = 10) -> Dict[str, Any]:
@@ -203,6 +367,7 @@ class GeminiService:
 
         try:
             #STRATEGY 1: FINITE SEARCH - Supabase Excel Functions Database
+            finite_results = []
             #Use our existing excel_function_search method to find matching functions
             try:
                 logger.info(f"Starting finite search for query: {query}")
@@ -214,6 +379,7 @@ class GeminiService:
             except Exception as e:
                 logger.warning(f"Error in finite search: {e}")
                 search_results['finite_search_results'] = []
+                finite_results  = []
 
             #STRATEGY 2: INFINITE SEARCH - User Content Analysis (if excel context is provided)
             if excel_context:
@@ -591,7 +757,8 @@ class GeminiService:
                             category='HARM_CATEGORY_HATE_SPEECH',
                             threshold='BLOCK_ONLY_HIGH'
                         ),
-                    ]
+                    ],
+                    tools=[CODE_EXECUTION_TOOL]  # ✅ Add tools for existing chats
                 ),
                 history = history
             )
@@ -976,6 +1143,7 @@ class GeminiService:
             return "intermediate"
         else:
             return "basic"
+    
     
     
 #Create an instance of the GeminiService class

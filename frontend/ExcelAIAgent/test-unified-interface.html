@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Unified Interface</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 3px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Unified Chat-Executor Interface</h1>
+    
+    <div class="test-section info">
+        <h3>📋 Test Instructions</h3>
+        <p>This page tests the unified interface by making direct API calls to the backend.</p>
+        <p><strong>Backend:</strong> https://127.0.0.1:8003</p>
+        <p><strong>Frontend:</strong> http://localhost:3000</p>
+    </div>
+
+    <div class="test-section">
+        <h3>🔧 Test 1: Simple Calculation (Should Execute Code)</h3>
+        <button onclick="testCalculation()">Test: "Calculate 2+2"</button>
+        <div id="result1"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>📊 Test 2: Generate Excel File (Should Execute Code)</h3>
+        <button onclick="testExcelGeneration()">Test: "Generate a file with 10 rows of sales data"</button>
+        <div id="result2"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>💬 Test 3: Conversational Response (Should NOT Execute Code)</h3>
+        <button onclick="testConversation()">Test: "How do I use VLOOKUP?"</button>
+        <div id="result3"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://127.0.0.1:8003/api/v1/chat/completion';
+        
+        async function makeRequest(message, resultId) {
+            const resultDiv = document.getElementById(resultId);
+            resultDiv.innerHTML = '<p>🔄 Testing...</p>';
+            
+            try {
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        conversation_id: null
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                // Display results
+                let html = '<div class="success">';
+                html += `<h4>✅ Request Successful</h4>`;
+                html += `<p><strong>Message:</strong> ${message}</p>`;
+                html += `<p><strong>AI Response:</strong> ${data.ai_response}</p>`;
+                html += `<p><strong>Executed Code:</strong> ${data.executed_code ? '✅ YES' : '❌ NO'}</p>`;
+                
+                if (data.executed_code) {
+                    html += `<p><strong>Execution Reason:</strong> ${data.execution_reason}</p>`;
+                    if (data.code_output) {
+                        html += `<p><strong>Code Output:</strong></p><pre>${data.code_output}</pre>`;
+                    }
+                    if (data.output_files && Object.keys(data.output_files).length > 0) {
+                        html += `<p><strong>Generated Files:</strong> ${Object.keys(data.output_files).join(', ')}</p>`;
+                        html += `<p><strong>Files Available for Download:</strong> ${Object.keys(data.output_files).length} file(s)</p>`;
+                    }
+                }
+                
+                html += `<p><strong>Conversation ID:</strong> ${data.conversation_id}</p>`;
+                html += '</div>';
+                
+                resultDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error"><h4>❌ Request Failed</h4><p>Error: ${error.message}</p></div>`;
+            }
+        }
+        
+        function testCalculation() {
+            makeRequest('Calculate 2+2', 'result1');
+        }
+        
+        function testExcelGeneration() {
+            makeRequest('Generate a file with 10 rows of sales data', 'result2');
+        }
+        
+        function testConversation() {
+            makeRequest('How do I use VLOOKUP?', 'result3');
+        }
+    </script>
+</body>
+</html>

@@ -52,7 +52,7 @@ operationType?: string;
 //===========================================
 
 // ✅ Using HTTPS with mkcert certificates (trusted SSL)
-const API_BASE_URL = 'https://127.0.0.1:8000';
+const API_BASE_URL = 'https://127.0.0.1:8003';
 const AI_EXECUTOR_ENDPOINT = `${API_BASE_URL}/api/v1/ai-executor/execute-task`;
 
 //===========================================
@@ -117,7 +117,24 @@ export interface ChatRequest {
 export interface ChatResponse {
     ai_response: string;
     conversation_id: string;
-    search_results?: any;
+    
+    // Code execution fields
+    executed_code?: boolean;
+    code_output?: string;
+    output_files?: Record<string, string>;  // filename -> base64
+    execution_reason?: string;
+    
+    // Permission request fields
+    requires_permission?: boolean;
+    risk_level?: string;
+    code_preview?: string;
+    
+    // Search context
+    search_results?: {
+        semantic_matches: number;
+        excel_functions: number;
+        workbook_context: boolean;
+    };
 }
 
 export async function sendChatMessage(

@@ -1,0 +1,799 @@
+# Unified Chat-Executor Interface Implementation
+
+## Overview
+
+Merge the ChatComponent and AIExecutor into a single intelligent interface that seamlessly handles both conversational responses and code execution, using Gemini's function calling to automatically decide which action to take.
+
+## Problem Statement
+
+**Current State:**
+
+- **ChatComponent**: Has semantic search, Excel function knowledge, conversation history BUT cannot execute code
+- **AIExecutor**: Can execute Python code BUT has no intelligence, search, or conversation memory
+
+**User Pain Point:**
+
+```
+User: "My sales data is in column B" → ChatComponent ✅ (remembers)
+User: "Calculate the sum" → Must switch to AIExecutor ❌ (loses all context!)
+```
+
+**Industry Standard (ChatGPT, Claude, Cursor):**
+
+- Single unified chat interface for everything
+- AI automatically decides: conversational response vs code execution
+- User never manually switches tools
+- Full context maintained across all interactions
+
+## Research Findings: How Modern AI Assistants Work
+
+### Function Calling / Tool Use Pattern
+
+All modern AI assistants (ChatGPT, Claude, Gemini, Cursor) use the same pattern:
+
+```python
+# Single API call with tools defined
+response = model.generate_content(
+    messages=[{"role": "user", "content": "Calculate sum of sales in column B"}],
+    tools=[
+        {
+            "name": "execute_python_code",
+            "description": "Execute Python code for data analysis and calculations",
+            "parameters": {
+                "code": "string",
+                "reason": "string" 
+            }
+        },
+        {
+            "name": "insert_excel_data",
+            "description": "Insert data directly into Excel workbook",
+            "parameters": {
+                "data": "array",
+                "location": "string"
+            }
+        }
+    ]
+)
+
+# AI internally decides (no extra cost):
+# Option A: Just respond with text
+# Option B: Call execute_python_code tool
+# Option C: Call insert_excel_data tool
+```
+
+**Key Insights:**
+
+1. **No separate decision API call** - Model decides tool use in same request
+2. **Zero extra cost** - Tool selection is part of normal inference
+3. **Parallel tool calls** - Can call multiple tools in single response
+4. **Natural fallback** - If no tool needed, just responds conversationally
+
+### Gemini's Function Calling API
+
+Google Gemini supports function calling through:
+
+```python
+from google import genai
+from google.genai import types
+
+# Define tools
+tools = [types.Tool(
+    function_declarations=[
+        types.FunctionDeclaration(
+            name="execute_python_code",
+            description="Execute Python code to analyze Excel data, perform calculations, generate files",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "code": types.Schema(type=types.Type.STRING),
+                    "reason": types.Schema(type=types.Type.STRING),
+                    "files_needed": types.Schema(type=types.Type.ARRAY)
+                },
+                required=["code", "reason"]
+            )
+        )
+    ]
+)]
+
+# Use in chat
+response = client.models.generate_content(
+    model="gemini-2.0-flash",
+    contents=conversation_history + [{"role": "user", "parts": [message]}],
+    tools=tools
+)
+
+# Check response type
+if response.candidates[0].content.parts[0].function_call:
+    # AI wants to execute code
+    function_call = response.candidates[0].content.parts[0].function_call
+    code = function_call.args["code"]
+    reason = function_call.args["reason"]
+    # Execute and return results
+else:
+    # AI wants to respond conversationally
+    text_response = response.candidates[0].content.parts[0].text
+```
+
+## Architecture Design
+
+### Backend: Unified GeminiService Enhancement
+
+**File:** `backend/app/services/gemini_service.py`
+
+**Enhancement Strategy:**
+
+1. Add function declaration for code execution
+2. Modify `chat_completion()` to handle function calls
+3. Integrate AICodeExecutor when function call detected
+4. Return unified response format
+
+### Frontend: Enhanced ChatComponent
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/ChatComponent.tsx`
+
+**Enhancement Strategy:**
+
+1. Keep existing chat UI
+2. Add code execution result display
+3. Add file download/insert buttons
+4. Show "AI is executing code..." status
+5. Display both text and code results seamlessly
+
+## Implementation Plan
+
+### Phase 1: Backend - Function Calling Integration
+
+#### Task 1.1: Add Function Declaration to GeminiService
+
+**File:** `backend/app/services/gemini_service.py`
+
+**Add after imports:**
+
+```python
+from google.genai import types
+
+# Define tool for code execution
+CODE_EXECUTION_TOOL = types.Tool(
+    function_declarations=[
+        types.FunctionDeclaration(
+            name="execute_python_code",
+            description="""Execute Python code to:
+        - Analyze Excel data (pandas, openpyxl)
+        - Perform calculations and data transformations
+        - Generate new Excel files or visualizations
+        - Process uploaded files
+            
+            Use this when the user asks to:
+        - Calculate, sum, average, analyze data
+        - Create, modify, or process Excel files
+        - Generate reports or visualizations
+        - Perform any computational task
+            
+            Do NOT use for:
+        - Simple questions about Excel functions
+        - General conversation
+        - When user just wants information""",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "code": types.Schema(
+                        type=types.Type.STRING,
+                        description="Python code to execute. Must be complete and runnable."
+                    ),
+                    "reason": types.Schema(
+                        type=types.Type.STRING,
+                        description="Brief explanation of why code execution is needed"
+                    ),
+                    "expects_file_output": types.Schema(
+                        type=types.Type.BOOLEAN,
+                        description="True if code will generate Excel/CSV files for download"
+                    )
+                },
+                required=["code", "reason"]
+            )
+        )
+    ]
+)
+```
+
+#### Task 1.2: Enhance chat_completion() Method
+
+**File:** `backend/app/services/gemini_service.py`
+
+**Modify the `chat_completion()` method:**
+
+```python
+async def chat_completion(
+    self,
+    message: str,
+    conversation_id: Optional[str],
+    user_id: str
+) -> Dict[str, Any]:
+    """
+    Unified handler for conversational and code execution requests.
+    Uses Gemini function calling to automatically decide which to use.
+    """
+    
+    # Step 1: Perform intelligent search (EXISTING - keep this!)
+    semantic_results = await self.semantic_similarity_search(message, user_id)
+    excel_function_results = await self.excel_function_search(message)
+    workbook_context = await self.hybrid_lexical_search(message, user_id)
+    
+    # Step 2: Build enriched context
+    context = self._build_context(semantic_results, excel_function_results, workbook_context)
+    
+    # Step 3: Get or create conversation
+    if conversation_id:
+        chat = self._get_existing_chat(conversation_id)
+    else:
+        conversation_id = await self._create_new_chat(user_id, message)
+        chat = self.model.start_chat(history=[])
+    
+    # Step 4: Generate response WITH function calling enabled
+    prompt = self._build_prompt_with_context(message, context)
+    
+    response = chat.send_message(
+        prompt,
+        tools=[CODE_EXECUTION_TOOL]  # ✅ Enable function calling
+    )
+    
+    # Step 5: Check if AI wants to execute code
+    function_call = None
+    if response.candidates[0].content.parts[0].function_call:
+        function_call = response.candidates[0].content.parts[0].function_call
+    
+    # Step 6: Handle function call (code execution)
+    if function_call and function_call.name == "execute_python_code":
+        logger.info(f"🔧 AI requested code execution: {function_call.args['reason']}")
+        
+        # Import AICodeExecutor
+        from app.services.ai_executor.executor import AICodeExecutor
+        
+        # Execute code with full context
+        executor = AICodeExecutor(user_id=user_id)
+        execution_result = await executor.execute_with_generated_code(
+            code=function_call.args["code"],
+            context=context,
+            user_request=message
+        )
+        
+        # Send execution results back to AI for natural language response
+        execution_summary = f"""
+        Code execution completed.
+        Output: {execution_result.get('output', 'No output')}
+        Files generated: {list(execution_result.get('output_files', {}).keys())}
+        """
+        
+        final_response = chat.send_message(
+            f"The code execution results are: {execution_summary}. "
+            f"Please provide a natural language summary to the user."
+        )
+        
+        ai_response_text = final_response.candidates[0].content.parts[0].text
+        
+        # Save conversation
+        await self._append_messages(
+            conversation_id,
+            message,
+            f"{ai_response_text}\n[Code executed: {function_call.args['reason']}]"
+        )
+        
+        return {
+            "ai_response": ai_response_text,
+            "conversation_id": conversation_id,
+            "executed_code": True,
+            "code_output": execution_result.get("output"),
+            "output_files": execution_result.get("output_files"),
+            "execution_reason": function_call.args["reason"],
+            "search_results": {
+                "semantic_matches": len(semantic_results),
+                "excel_functions": len(excel_function_results),
+                "workbook_context": bool(workbook_context)
+            }
+        }
+    
+    # Step 7: Handle conversational response (no code execution)
+    else:
+        ai_response_text = response.candidates[0].content.parts[0].text
+        
+        # Save conversation
+        await self._append_messages(conversation_id, message, ai_response_text)
+        
+        return {
+            "ai_response": ai_response_text,
+            "conversation_id": conversation_id,
+            "executed_code": False,
+            "search_results": {
+                "semantic_matches": len(semantic_results),
+                "excel_functions": len(excel_function_results),
+                "workbook_context": bool(workbook_context)
+            }
+        }
+```
+
+#### Task 1.3: Add execute_with_generated_code() to AICodeExecutor
+
+**File:** `backend/app/services/ai_executor/executor.py`
+
+**Add new method:**
+
+```python
+async def execute_with_generated_code(
+    self,
+    code: str,
+    context: Dict[str, Any],
+    user_request: str
+) -> Dict[str, Any]:
+    """
+    Execute AI-generated code that came from function calling.
+    This skips the code generation step since AI already provided the code.
+    
+    Args:
+        code: Python code generated by Gemini
+        context: Search context from GeminiService
+        user_request: Original user request for logging
+    
+    Returns:
+        Execution result dict with output and files
+    """
+    logger.info(f"⚡ Executing AI-generated code for user {self.user_id}")
+    
+    # Step 1: Validate code security
+    validation_result = self.validator.validate_code(code)
+    
+    # Step 2: Handle different risk levels (same as existing logic)
+    if not validation_result.is_safe:
+        logger.error(f"🚫 HIGH RISK code blocked")
+        return {
+            "success": False,
+            "error": "Generated code failed security validation",
+            "reason": validation_result.reason
+        }
+    
+    if validation_result.requires_permission:
+        logger.warning(f"⚠️ MEDIUM_RISK permission required")
+        return {
+            "success": False,
+            "requires_permission": True,
+            "risk_level": "medium",
+            "explanation": validation_result.explanation,
+            "code_preview": code
+        }
+    
+    # Step 3: Execute in Docker sandbox
+    execution_result = await self.sandbox.execute_code(
+        code=code,
+        input_files={},  # TODO: Handle file uploads from chat
+        timeout=120
+    )
+    
+    # Step 4: Log to audit
+    await self._log_execution_to_audit(
+        user_request=user_request,
+        generated_code=code,
+        validation_result=validation_result,
+        execution_result=execution_result,
+        status="success" if execution_result.success else "failed"
+    )
+    
+    # Step 5: Return results
+    if execution_result.success:
+        return {
+            "success": True,
+            "output": execution_result.output,
+            "output_files": execution_result.output_files,
+            "exit_code": execution_result.exit_code
+        }
+    else:
+        return {
+            "success": False,
+            "error": "Code execution failed",
+            "details": execution_result.error,
+            "output": execution_result.output
+        }
+```
+
+#### Task 1.4: Update ChatResponse Schema
+
+**File:** `backend/app/schemas/chat.py`
+
+**Add new fields:**
+
+```python
+class ChatResponse(BaseModel):
+    ai_response: str = Field(description="AI's natural language response")
+    conversation_id: str = Field(description="Conversation ID for continuity")
+    
+    # NEW: Code execution fields
+    executed_code: bool = Field(default=False, description="Whether code was executed")
+    code_output: Optional[str] = Field(None, description="Output from code execution")
+    output_files: Optional[Dict[str, str]] = Field(None, description="Generated files (base64)")
+    execution_reason: Optional[str] = Field(None, description="Why code was executed")
+    
+    # NEW: MEDIUM_RISK permission handling
+    requires_permission: Optional[bool] = Field(None, description="Code needs user approval")
+    risk_level: Optional[str] = Field(None, description="Risk level: low/medium/high")
+    code_preview: Optional[str] = Field(None, description="Code to review before approval")
+    
+    # Search context (existing)
+    search_results: Optional[Dict[str, Any]] = Field(None, description="Search results used")
+```
+
+### Phase 2: Frontend - Enhanced ChatComponent
+
+#### Task 2.1: Update ChatResponse Interface
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/services/apiService.ts`
+
+**Update interface:**
+
+```typescript
+export interface ChatResponse {
+    ai_response: string;
+    conversation_id: string;
+    
+    // Code execution fields
+    executed_code?: boolean;
+    code_output?: string;
+    output_files?: Record<string, string>;  // filename -> base64
+    execution_reason?: string;
+    
+    // Permission request fields
+    requires_permission?: boolean;
+    risk_level?: string;
+    code_preview?: string;
+    
+    // Search context
+    search_results?: {
+        semantic_matches: number;
+        excel_functions: number;
+        workbook_context: boolean;
+    };
+}
+```
+
+#### Task 2.2: Enhance ChatComponent UI
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/ChatComponent.tsx`
+
+**Add to Message interface:**
+
+```typescript
+interface Message {
+    role: "user" | "ai";
+    content: string;
+    timestamp: Date;
+    
+    // NEW: Code execution metadata
+    executedCode?: boolean;
+    codeOutput?: string;
+    outputFiles?: Record<string, string>;
+    executionReason?: string;
+}
+```
+
+**Add code output rendering:**
+
+```typescript
+const renderMessage = (msg: Message) => {
+    if (msg.role === "ai") {
+        return (
+            <div className="ai-message-container">
+                {/* Main AI response */}
+                <Text className="ai-response">{msg.content}</Text>
+                
+                {/* Code execution indicator */}
+                {msg.executedCode && (
+                    <div className="code-execution-badge">
+                        <span>🔧 Code executed: {msg.executionReason}</span>
+                    </div>
+                )}
+                
+                {/* Code output display */}
+                {msg.codeOutput && (
+                    <div className="code-output-container">
+                        <Text weight="semibold">Output:</Text>
+                        <pre className="code-output">{msg.codeOutput}</pre>
+                    </div>
+                )}
+                
+                {/* Generated files */}
+                {msg.outputFiles && Object.keys(msg.outputFiles).length > 0 && (
+                    <div className="output-files">
+                        <Text weight="semibold">Generated Files:</Text>
+                        {Object.entries(msg.outputFiles).map(([filename, base64]) => (
+                            <Button
+                                key={filename}
+                                appearance="primary"
+                                size="small"
+                                onClick={() => handleInsertToExcel(filename, base64)}
+                            >
+                                📊 Insert {filename} into Excel
+                            </Button>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    }
+    
+    return <Text className="user-message">{msg.content}</Text>;
+};
+```
+
+#### Task 2.3: Add Excel Insertion Handler
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/ChatComponent.tsx`
+
+**Add handler (reuse from AIExecutor):**
+
+```typescript
+const handleInsertToExcel = async (filename: string, base64Content: string) => {
+    setStatusMessage({ type: "info", text: `Inserting ${filename}...` });
+    
+    try {
+        // Decode base64
+        const binaryString = atob(base64Content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        // Parse Excel file
+        const workbook = XLSX.read(bytes, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        // Insert into Excel using Office.js
+        await Excel.run(async (context) => {
+            const newSheet = context.workbook.worksheets.add(filename.replace('.xlsx', ''));
+            const range = newSheet.getRangeByIndexes(
+                0, 0, 
+                data.length, 
+                Math.max(...data.map((row: any) => row.length))
+            );
+            range.values = data;
+            newSheet.activate();
+            await context.sync();
+        });
+        
+        setStatusMessage({ 
+            type: "success", 
+            text: `✅ ${filename} inserted successfully!` 
+        });
+    } catch (error) {
+        setStatusMessage({ 
+            type: "error", 
+            text: `Failed to insert ${filename}: ${error.message}` 
+        });
+    }
+};
+```
+
+#### Task 2.4: Add Loading State for Code Execution
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/ChatComponent.tsx`
+
+**Enhance handleSendMessage:**
+
+```typescript
+const handleSendMessage = async () => {
+    if (!input.trim()) return;
+    
+    const userMessage: Message = {
+        role: "user",
+        content: input,
+        timestamp: new Date()
+    };
+    
+    setMessages([...messages, userMessage]);
+    setInput("");
+    setIsLoading(true);
+    
+    try {
+        const result = await sendChatMessage(input, conversationId);
+        
+        // Build AI message with execution metadata
+        const aiMessage: Message = {
+            role: "ai",
+            content: result.ai_response,
+            timestamp: new Date(),
+            executedCode: result.executed_code,
+            codeOutput: result.code_output,
+            outputFiles: result.output_files,
+            executionReason: result.execution_reason
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+        setConversationId(result.conversation_id);
+        
+        // Show success message if code executed
+        if (result.executed_code) {
+            setStatusMessage({
+                type: "success",
+                text: `✅ ${result.execution_reason}`
+            });
+        }
+        
+    } catch (error) {
+        console.error("Chat error:", error);
+        const errorMessage: Message = {
+            role: "ai",
+            content: `Sorry, I encountered an error: ${error.message}`,
+            timestamp: new Date()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+    } finally {
+        setIsLoading(false);
+    }
+};
+```
+
+### Phase 3: UI/UX Polish
+
+#### Task 3.1: Remove AIExecutor Component
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/App.tsx`
+
+**Remove AIExecutor:**
+
+```typescript
+// REMOVE these lines:
+// import AIExecutor from "./AIExecutor";
+// <AIExecutor />
+
+// KEEP only ChatComponent:
+import ChatComponent from "./ChatComponent";
+
+// In render:
+<ChatComponent />  // Now handles everything!
+```
+
+#### Task 3.2: Add Execution Status Indicators
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/ChatComponent.tsx`
+
+**Add status badges:**
+
+```typescript
+// While AI is thinking/executing
+{isLoading && (
+    <div className="ai-status">
+        <Spinner size="small" />
+        <Text>
+            {messages.length > 0 && messages[messages.length - 1].role === "user" 
+                ? "AI is thinking..." 
+                : "Executing code..."}
+        </Text>
+    </div>
+)}
+```
+
+#### Task 3.3: Add File Upload to Chat (Optional Enhancement)
+
+**File:** `frontend/ExcelAIAgent/src/taskpane/components/ChatComponent.tsx`
+
+**Add file upload for code execution:**
+
+```typescript
+const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+
+// Add file input
+<input
+    type="file"
+    id="chat-file-upload"
+    multiple
+    accept=".xlsx,.xls,.csv"
+    style={{ display: "none" }}
+    onChange={(e) => setUploadedFiles(Array.from(e.target.files || []))}
+/>
+
+// Add upload button in chat input area
+<Button
+    icon={<AttachRegular />}
+    appearance="subtle"
+    onClick={() => document.getElementById("chat-file-upload")?.click()}
+    title="Attach files"
+/>
+
+// Show uploaded files
+{uploadedFiles.length > 0 && (
+    <div className="uploaded-files">
+        {uploadedFiles.map((file, idx) => (
+            <Badge key={idx}>
+                {file.name}
+                <Button
+                    icon={<DismissRegular />}
+                    size="small"
+                    onClick={() => setUploadedFiles(files => 
+                        files.filter((_, i) => i !== idx)
+                    )}
+                />
+            </Badge>
+        ))}
+    </div>
+)}
+```
+
+## Testing Strategy
+
+### Test Scenario 1: Conversational Flow with Context
+
+```
+User: "My sales data is in column B on Sheet1"
+Expected: AI acknowledges, no code execution
+
+User: "Calculate the sum"
+Expected: 
+- AI detects execution intent
+- Uses context (column B, Sheet1)
+- Executes code automatically
+- Returns natural language + results
+```
+
+### Test Scenario 2: Pure Conversation (No Execution)
+
+```
+User: "How do I use VLOOKUP?"
+Expected: Conversational response with Excel function knowledge, no code execution
+
+User: "What's the difference between VLOOKUP and INDEX/MATCH?"
+Expected: Conversational comparison, no code execution
+```
+
+### Test Scenario 3: Multi-Step Execution with Context
+
+```
+User: "I have sales data in Q1.xlsx"
+Expected: Acknowledges
+
+User: "Calculate total revenue"
+Expected: Executes code, asks user to upload file OR works with current workbook
+
+User: "Now show me top 5 products"
+Expected: Uses previous context, executes new calculation
+```
+
+### Test Scenario 4: MEDIUM_RISK Permission Request
+
+```
+User: "Download sales data from our API"
+Expected:
+- AI generates code with requests library
+- System detects MEDIUM_RISK
+- Shows permission dialog with code preview
+- User can approve/deny
+```
+
+## Success Criteria
+
+### Backend
+
+- ✅ Function calling enabled in GeminiService
+- ✅ AI automatically decides execution vs conversation
+- ✅ Full context (search results) passed to code execution
+- ✅ Unified response format for both modes
+- ✅ MEDIUM_RISK permission flow working
+
+### Frontend
+
+- ✅ Single chat interface handles everything
+- ✅ Code execution results displayed inline
+- ✅ Generated files can be inserted into Excel
+- ✅ Loading states show "thinking" vs "executing"
+- ✅ No manual switching between tools needed
+
+### User Experience
+
+- ✅ User never needs to know about two separate tools
+- ✅ Context maintained across all interactions
+- ✅ Seamless transition between chat and execution
+- ✅ Natural conversation flow maintained
+- ✅ Excel function knowledge accessible anytime
+
+## Benefits
+
+1. **Unified Experience**: Like ChatGPT/Claude/Cursor - one interface for everything
+2. **Context Preservation**: Search results + conversation history always available
+3. **Automatic Intent Detection**: AI decides when to execute, user doesn't think about it
