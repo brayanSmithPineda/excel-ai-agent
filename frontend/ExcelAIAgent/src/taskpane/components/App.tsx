@@ -5,7 +5,6 @@ import Header from "./Header"; // Header component showing logo and title
 import HeroList, { HeroListItem } from "./HeroList"; // List component showing feature highlights
 import TextInsertion from "./TextInsertion"; // Component for interacting with Excel text insertion
 import ExcelReader from "./ExcelReader"; // Component for testing Excel operations (Day 2 Frontend)
-import AIExecutor from "./AIExecutor"; // Component for the AI executor
 import ChatComponent from "./ChatComponent"; // Component for the chat interface
 import { LoginComponent } from "./LoginComponent"; // Component for authentication
 import { AuthProvider, useAuth } from "../../contexts/AuthContext"; // Authentication context
@@ -110,8 +109,6 @@ const AppContent: React.FC<AppProps> = (props: AppProps) => {
         items={listItems}
       />
       
-      {/* AIExecutor component */}
-      <AIExecutor />
 
       {/* ChatComponent component */}
       <ChatComponent />
