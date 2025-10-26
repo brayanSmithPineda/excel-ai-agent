@@ -41,8 +41,7 @@ async def execute_task(
     files: List[UploadFile] = File(default=[], description="Optional Excel files to process"),
     
     # Authentication (get current user from JWT token)
-    #current_user: Dict[str, Any] = Depends(get_current_user)
-    current_user: Optional[Dict[str, Any]] = None  # Temporarily disabled for testing
+    current_user: Dict[str, Any] = Depends(get_current_user)  # ✅ Enable JWT validation
 
 ):
     """
@@ -70,7 +69,7 @@ async def execute_task(
     """
     try:
         # Log the request
-        user_id = current_user["user_id"] if current_user else "unauthenticated"
+        user_id = current_user.get("sub") or current_user.get("user_id")
         logger.info(f"🚀 AI Executor request from user {user_id}: {user_request}")
         logger.info(f"📁 Files uploaded: {len(files)}")
 
