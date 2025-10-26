@@ -59,7 +59,8 @@ async def chat_completion(
         result = await gemini_service.chat_completion(
             message=request.message,
             conversation_id=request.conversation_id,
-            user_id=user_id
+            user_id=user_id,
+            workbook_data=request.workbook_data
         )
         
         # Debug logging
@@ -87,6 +88,12 @@ async def chat_completion(
             code_output=result.get("code_output"),
             output_files=result.get("output_files"),
             execution_reason=result.get("execution_reason"),
+            # NEW: Formula writing fields
+            write_formulas=result.get("write_formulas", False),
+            office_js_code=result.get("office_js_code"),
+            formula_reason=result.get("formula_reason"),
+            target_column=result.get("target_column"),
+            formula_description=result.get("formula_description"),
             # Permission request fields
             requires_permission=result.get("requires_permission"),
             risk_level=result.get("risk_level"),

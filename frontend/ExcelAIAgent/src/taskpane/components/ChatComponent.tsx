@@ -76,11 +76,16 @@ interface Message {
     content: string;
     timestamp: Date;
     
-    // NEW: Code execution metadata
+    // Code execution metadata
     executedCode?: boolean;
     codeOutput?: string;
     outputFiles?: Record<string, string>;
     executionReason?: string;
+    
+    // NEW: Formula writing metadata
+    wroteFormulas?: boolean;
+    formulaReason?: string;
+    targetColumn?: string;
 }
 
 
@@ -116,6 +121,14 @@ const ChatComponent: React.FC = () => {
             // Call chat API using the new service
             const result = await sendChatMessage(input, conversationId);
 
+            // DEBUG: Log full API response for testing
+            console.log('🔍 DEBUG - Full API Response:', result);
+            console.log('🔍 DEBUG - executed_code:', result.executed_code);
+            console.log('🔍 DEBUG - execution_reason:', result.execution_reason);
+            console.log('🔍 DEBUG - code_output:', result.code_output);
+            console.log('🔍 DEBUG - output_files:', result.output_files);
+            console.log('🔍 DEBUG - write_formulas:', result.write_formulas);
+
             // Build AI message with execution metadata
             const aiMessage: Message = {
                 role: "ai",
@@ -124,12 +137,24 @@ const ChatComponent: React.FC = () => {
                 executedCode: result.executed_code,
                 codeOutput: result.code_output,
                 outputFiles: result.output_files,
-                executionReason: result.execution_reason
+                executionReason: result.execution_reason,
+                // NEW: Formula writing metadata
+                wroteFormulas: result.write_formulas,
+                formulaReason: result.formula_reason,
+                targetColumn: result.target_column
             };
             setMessages(prev => [...prev, aiMessage]);
 
             // Save conversation ID for continuity
             setConversationId(result.conversation_id);
+
+            // NEW: Auto-execute formulas if AI generated them
+            if (result.write_formulas && result.office_js_code) {
+                await handleExecuteFormulas(
+                    result.office_js_code, 
+                    result.formula_reason || "Adding formulas"
+                );
+            }
 
             // Show success message if code executed
             if (result.executed_code) {
@@ -149,6 +174,29 @@ const ChatComponent: React.FC = () => {
             setMessages(prev => [...prev, errorMessage]);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    // NEW: Formula execution handler (Office.js direct)
+    const handleExecuteFormulas = async (officeJsCode: string, reason: string) => {
+        setStatusMessage({ type: "info", text: `Writing formulas: ${reason}...` });
+        
+        try {
+            // Execute the Office.js code directly
+            // Create a function from the string and execute it
+            const codeFunction = new Function('Excel', 'context', `return (async () => { ${officeJsCode} })();`);
+            await codeFunction(Excel, null);
+            
+            setStatusMessage({ 
+                type: "success", 
+                text: `✅ Formulas added successfully!` 
+            });
+        } catch (error) {
+            console.error("Formula execution error:", error);
+            setStatusMessage({ 
+                type: "error", 
+                text: `Failed to write formulas: ${error.message}` 
+            });
         }
     };
 
@@ -172,14 +220,50 @@ const ChatComponent: React.FC = () => {
             
             // Insert into Excel using Office.js
             await Excel.run(async (context) => {
-                const newSheet = context.workbook.worksheets.add(filename.replace('.xlsx', ''));
-                const range = newSheet.getRangeByIndexes(
-                    0, 0, 
-                    data.length, 
-                    Math.max(...data.map((row: any[]) => row.length))
-                );
-                range.values = data;
-                newSheet.activate();
+                // Get the currently active worksheet (context-aware)
+                const activeWorksheet = context.workbook.worksheets.getActiveWorksheet();
+                activeWorksheet.load("name");
+                await context.sync();
+                const activeTabName = activeWorksheet.name;
+                
+                // Use the active tab as the target sheet
+                let targetSheet;
+                try {
+                    targetSheet = context.workbook.worksheets.getItem(activeTabName);
+                } catch (error) {
+                    // If the active sheet doesn't exist (shouldn't happen), create it
+                    targetSheet = context.workbook.worksheets.add(activeTabName);
+                }
+                
+                // Validate and clean data
+                const cleanData = data.filter(row => row && row.length > 0);
+                if (cleanData.length === 0) {
+                    throw new Error("No valid data found in the file");
+                }
+                
+                // Calculate dimensions safely
+                const rowCount = cleanData.length;
+                const columnCounts = cleanData.map(row => row ? row.length : 0);
+                const maxColumnCount = Math.max(...columnCounts);
+                
+                console.log(`Inserting data: ${rowCount} rows, ${maxColumnCount} columns`);
+                console.log('Sample data:', cleanData.slice(0, 3));
+                
+                // Normalize data to ensure all rows have the same number of columns
+                const normalizedData = cleanData.map(row => {
+                    const normalizedRow = new Array(maxColumnCount).fill('');
+                    if (row) {
+                        for (let i = 0; i < Math.min(row.length, maxColumnCount); i++) {
+                            normalizedRow[i] = row[i] || '';
+                        }
+                    }
+                    return normalizedRow;
+                });
+                
+                // Clear existing data and insert new data
+                const range = targetSheet.getRangeByIndexes(0, 0, rowCount, maxColumnCount);
+                range.values = normalizedData;
+                targetSheet.activate();
                 await context.sync();
             });
             
@@ -220,10 +304,54 @@ const ChatComponent: React.FC = () => {
                     >
                         <Text>{msg.content}</Text>
                         
+                        {/* DEBUG: Show all response fields for testing */}
+                        {msg.role === "ai" && (
+                            <div style={{ 
+                                marginTop: '8px', 
+                                padding: '8px', 
+                                backgroundColor: '#f8f9fa', 
+                                borderRadius: '4px', 
+                                fontSize: '11px',
+                                border: '1px solid #dee2e6',
+                                fontFamily: 'monospace'
+                            }}>
+                                <div><strong>DEBUG - Response Fields:</strong></div>
+                                <div>• executed_code: {msg.executedCode ? 'TRUE' : 'FALSE'}</div>
+                                <div>• execution_reason: {msg.executionReason || 'null'}</div>
+                                <div>• code_output: {msg.codeOutput ? 'Present' : 'null'}</div>
+                                <div>• output_files: {msg.outputFiles && Object.keys(msg.outputFiles).length > 0 ? `${Object.keys(msg.outputFiles).length} files` : 'null'}</div>
+                            </div>
+                        )}
+                        
+                        {/* DEBUG: Show executed_code field for testing */}
+                        <div style={{ 
+                            marginTop: '8px', 
+                            padding: '4px 8px', 
+                            backgroundColor: msg.executedCode ? '#e8f5e8' : '#fff3cd', 
+                            borderRadius: '4px', 
+                            fontSize: '12px',
+                            border: '1px solid #ddd'
+                        }}>
+                            <strong>DEBUG - executed_code:</strong> {msg.executedCode ? 'TRUE' : 'FALSE'}
+                            {msg.executedCode && msg.executionReason && (
+                                <div style={{ marginTop: '4px' }}>
+                                    <strong>Reason:</strong> {msg.executionReason}
+                                </div>
+                            )}
+                        </div>
+                        
                         {/* Code execution indicator */}
                         {msg.executedCode && (
                             <div style={{ marginTop: '8px', padding: '4px 8px', backgroundColor: '#e3f2fd', borderRadius: '4px', fontSize: '12px' }}>
                                 🔧 Code executed: {msg.executionReason}
+                            </div>
+                        )}
+                        
+                        {/* NEW: Formula writing indicator */}
+                        {msg.wroteFormulas && (
+                            <div style={{ marginTop: '8px', padding: '4px 8px', backgroundColor: '#d4edda', borderRadius: '4px', fontSize: '12px' }}>
+                                📝 Formulas written: {msg.formulaReason}
+                                {msg.targetColumn && ` (Column: ${msg.targetColumn})`}
                             </div>
                         )}
                         

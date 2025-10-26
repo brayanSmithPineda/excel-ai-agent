@@ -18,23 +18,113 @@ CODE_EXECUTION_TOOL = types.Tool(
             name="execute_python_code",
             description="""EXECUTE PYTHON CODE when the user wants you to PERFORM an action with real data or files.
 
+🚨 CRITICAL: If the user asks you to DO something (add, modify, create, calculate, fix), you MUST use this tool. Do NOT just provide code examples - EXECUTE the code!
+
+🚨🚨🚨 CRITICAL: DO NOT USE THIS TOOL FOR FORMULAS! 🚨🚨🚨
+
+❌❌❌ NEVER use this tool when:
+- User wants to ADD FORMULAS to existing workbook
+- User mentions "CONCATENATE" → Use write_excel_formulas instead
+- User mentions "formula" → Use write_excel_formulas instead
+- User mentions "add column" → Use write_excel_formulas instead
+- User mentions "concatenate" → Use write_excel_formulas instead
+- User mentions "calculate column" → Use write_excel_formulas instead
+
+✅✅✅ Use THIS tool (execute_python_code) ONLY for:
+- Generating NEW Excel files with data
+- Complex data analysis and transformations
+- Creating downloadable reports
+- Processing large datasets
+- When user wants NEW files (not formulas in existing data)
+- When user says "create", "generate", "make" NEW files
+
 🔥 ALWAYS use this tool when user says:
-- "create", "generate", "make", "build" → a file, spreadsheet, dataset
-- "calculate", "compute", "sum", "count", "analyze" → numbers or data
-- "process", "transform", "combine", "merge", "stack" → files or data
-- "write", "save", "export", "output" → results to a file
-- "run code", "execute", "perform" → any computation
+- "create", "generate", "make", "build" → a file, spreadsheet, dataset (ALWAYS EXECUTE)
+- "can you create", "can you generate", "can you make" → a file, spreadsheet, dataset (ALWAYS EXECUTE)
+- "calculate", "compute", "sum", "count", "analyze" → numbers or data (ALWAYS EXECUTE)
+- "process", "transform", "combine", "merge", "stack" → files or data (ALWAYS EXECUTE)
+- "add column", "add new column", "modify", "update", "change" → existing data (ALWAYS EXECUTE)
+- "write", "save", "export", "output" → results to a file (ALWAYS EXECUTE)
+- "run code", "execute", "perform" → any computation (ALWAYS EXECUTE)
+- "fix", "correct", "repair" → data or files (ALWAYS EXECUTE)
+- "concatenate", "combine columns", "merge columns" → data operations (ALWAYS EXECUTE)
 
 ❌ NEVER use for:
-- "how do I...", "what is...", "explain..." → Just explain, don't execute
+- "how do I...", "what is...", "what is...", "explain..." → Just explain, don't execute
 - "show me an example of..." → Provide example code, don't run it
 - Simple Excel formula questions → Answer directly
 
 💡 KEY RULE: If user wants RESULTS (files, calculations, data), execute code. If user wants KNOWLEDGE (explanations, concepts), just explain.
 
+🚨 CRITICAL: When user asks "Can you generate/create/make/build..." - ALWAYS EXECUTE CODE, don't just explain how to do it.
+
 Available libraries: pandas, openpyxl, numpy, pathlib
 Input files location: /tmp/input/
 Output files location: /tmp/output/
+
+📋 WORKBOOK DATA CONTEXT:
+The user's current workbook data is provided in the request. Use this data to:
+1. Work with existing data when user asks to modify/add columns
+2. Generate new data only when user asks to create something new
+3. For modifications: Take the existing data, make changes, and return the updated version
+4. For new files: Generate completely new data
+
+🚨 CRITICAL: When working with existing data, DO NOT try to read files from /tmp/input/. 
+Instead, use the provided workbook data directly in your code. The workbook data is provided in the context as:
+"Complete data for 'SheetName': [[row1], [row2], ...]"
+
+Use this data like this:
+```python
+# Get the workbook data from context (it's provided as a list of lists)
+workbook_data = [
+    ['Name', 'Department', 'Salary'],  # Header row
+    ['John', 'IT', 50000],            # Data rows
+    ['Jane', 'HR', 45000]
+]
+
+# Create DataFrame from the provided data
+df = pd.DataFrame(workbook_data[1:], columns=workbook_data[0])  # Skip header row, use first row as columns
+```
+
+NEVER use: df = pd.read_excel("/tmp/input/workbook.xlsx")
+ALWAYS use: df = pd.DataFrame(provided_data_structure)
+
+🔧 MODIFICATION INSTRUCTIONS:
+When user asks to "add column", "modify", "update", or "change" existing data:
+- Use the provided workbook data as your starting point
+- Modify the existing data structure (add columns, change values, etc.)
+- Return the COMPLETE modified dataset
+- Do NOT generate new sample data - work with the actual provided data
+- The output should be the same structure but with modifications applied
+
+🎯 TAB CONTEXT AWARENESS:
+- The user is currently working on a specific tab (indicated in the context)
+- When modifying data, target the ACTIVE TAB unless user specifies a different tab name
+- If user says "add a column to the sales data" but they're on "hrdata" tab, ask for clarification
+- If user says "add a column" without specifying tab, use the ACTIVE TAB
+- Always preserve the tab name in your response so the frontend knows which tab to modify
+
+🚨 CRITICAL: WORK WITH EXISTING DATA
+- ALWAYS use the provided workbook data as your starting point
+- NEVER generate new sample data when user asks to modify existing data
+- If user says "add a column to my data" - use THEIR actual data, not sample data
+- The output file should contain THEIR data with the requested modifications
+- Preserve all existing columns and rows, just add/modify what was requested
+
+📍 COLUMN POSITIONING INTELLIGENCE:
+- When user says "add column at column H" but data only has 5 columns (A-E), add at the END
+- When user says "add column between B and C", insert at the correct position
+- Always check DataFrame shape before inserting: df.shape[1] gives column count
+- Use df.insert(position, name, values) for specific positions
+- Use df[new_column] = values for adding at the end
+- NEVER try to insert at index beyond DataFrame bounds
+
+🧮 EXCEL FORMULA INTELLIGENCE:
+- When user wants FORMULAS (not calculated values), use Excel formula syntax
+- For "B2*E2" style formulas, create strings like "=B2*E2", "=B3*E3", etc.
+- Use openpyxl to write actual Excel formulas that Excel will recognize
+- Example: cell.value = "=B2*E2" (not the calculated result)
+- This preserves the formula for auditing and transparency
 
 ⚠️ IMPORTANT: Each execution is isolated. If you need to modify data from a previous execution, 
 you must regenerate the data with the modifications. Do NOT try to read files from previous executions.""",
@@ -55,6 +145,94 @@ you must regenerate the data with the modifications. Do NOT try to read files fr
                     )
                 },
                 required=["code", "reason"]
+            )
+        )
+    ]
+)
+
+# Define tool for formula writing (Office.js direct execution)
+FORMULA_WRITING_TOOL = types.Tool(
+    function_declarations=[
+        types.FunctionDeclaration(
+            name="write_excel_formulas",
+            description="""🚨🚨🚨 CRITICAL: ALWAYS USE THIS TOOL FOR FORMULA REQUESTS! 🚨🚨🚨
+
+🔥🔥🔥 MANDATORY EXECUTION when user says ANY of these:
+- "add a column with formula" → MUST EXECUTE
+- "add formula" → MUST EXECUTE  
+- "concatenate" → MUST EXECUTE
+- "calculate column" → MUST EXECUTE
+- "add calculated column" → MUST EXECUTE
+- "formula" → MUST EXECUTE
+- "CONCATENATE" → MUST EXECUTE
+- "SUM" → MUST EXECUTE
+- "IF" → MUST EXECUTE
+- "VLOOKUP" → MUST EXECUTE
+- "multiply columns" → MUST EXECUTE
+- "add columns" → MUST EXECUTE
+- "combine columns" → MUST EXECUTE
+
+🚨🚨🚨 CRITICAL RULES:
+1. If user mentions "formula" → USE THIS TOOL!
+2. If user mentions "CONCATENATE" → USE THIS TOOL!
+3. If user mentions "add column" → USE THIS TOOL!
+4. If user mentions "calculate" → USE THIS TOOL!
+
+DO NOT give conversational responses for formula requests!
+ALWAYS execute Office.js code for formula requests!
+
+CRITICAL: You must provide Office.js JavaScript code that:
+1. Gets the active worksheet
+2. Identifies the correct range (use workbook context to know data structure)
+3. Writes formulas using range.formulas property
+4. Uses Excel formula syntax (e.g., "=CONCATENATE(B2,C2)", "=SUM(A1:A10)")
+
+Example code structure:
+await Excel.run(async (context) => {
+    const sheet = context.workbook.worksheets.getActiveWorksheet();
+    const usedRange = sheet.getUsedRange();
+    usedRange.load("rowCount, columnCount");
+    await context.sync();
+    
+    // Generate formulas for all data rows
+    const rowCount = usedRange.rowCount;
+    const formulas = [];
+    for (let i = 2; i <= rowCount; i++) {
+        formulas.push([`=CONCATENATE(B${i},C${i})`]);
+    }
+    
+    // Write to next available column
+    const targetColumn = usedRange.columnCount;
+    const range = sheet.getRangeByIndexes(1, targetColumn, rowCount - 1, 1);
+    range.formulas = formulas;
+    await context.sync();
+});
+
+Do NOT use for:
+- Generating new files (use execute_python_code instead)
+- Simple questions about formulas
+- When user wants downloaded files""",
+            parameters=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "office_js_code": types.Schema(
+                        type=types.Type.STRING,
+                        description="Complete Office.js JavaScript code to write formulas. Must be executable."
+                    ),
+                    "reason": types.Schema(
+                        type=types.Type.STRING,
+                        description="Brief explanation of what formulas are being added"
+                    ),
+                    "target_column": types.Schema(
+                        type=types.Type.STRING,
+                        description="Column letter or description (e.g., 'E', 'Next available column')"
+                    ),
+                    "formula_description": types.Schema(
+                        type=types.Type.STRING,
+                        description="User-friendly description of the formula (e.g., 'Concatenates Name and Department')"
+                    )
+                },
+                required=["office_js_code", "reason"]
             )
         )
     ]
@@ -85,7 +263,7 @@ class GeminiService:
         self.symbol_table = DynamicSymbolTable()
         self.parser = ExcelFormulaParser()
     
-    async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None) -> Dict[str, Any]:
+    async def chat_completion(self, message: str, conversation_id: Optional[str] = None, user_id: str = None, workbook_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Unified handler for conversational and code execution requests.
         Uses Gemini function calling to automatically decide which to use.
@@ -127,6 +305,26 @@ class GeminiService:
                                     for chunk in hybrid_results['semantic_search_results'][:2]]
                     context_parts.extend(past_context)
 
+                # Add workbook data context if available
+                if workbook_data and workbook_data.get('worksheets'):
+                    workbook_context = []
+                    active_tab = workbook_data.get('activeTab', 'Sheet1')  # ✅ Get active tab
+                    
+                    # Add active tab context first
+                    workbook_context.append(f"🎯 USER IS CURRENTLY WORKING ON TAB: '{active_tab}'")
+                    workbook_context.append(f"📋 When user asks to modify data, target the '{active_tab}' tab unless they specify a different tab name.")
+                    
+                    if workbook_data and 'worksheets' in workbook_data:
+                        for worksheet in workbook_data['worksheets']:
+                            if worksheet.get('data') and len(worksheet['data']) > 0:
+                                is_active = " (ACTIVE TAB)" if worksheet['name'] == active_tab else ""
+                                workbook_context.append(f"Worksheet '{worksheet['name']}': {worksheet['rowCount']} rows, {worksheet['columnCount']} columns{is_active}")
+                                # Provide complete data for modifications
+                                workbook_context.append(f"Complete data for '{worksheet['name']}': {worksheet['data']}")
+                    if workbook_context:
+                        context_parts.extend(workbook_context)
+                        logger.info(f"Added workbook context with {len(workbook_context)} pieces (active tab: {active_tab})")
+
                 # Combine all context
                 if context_parts:
                     relevant_context = "\n".join(context_parts)
@@ -156,7 +354,18 @@ class GeminiService:
                 chat = self.client.chats.create(
                     model="gemini-2.0-flash",
                     config=types.GenerateContentConfig(
-                        system_instruction="You are an excel expert that can answer questions and help with tasks. Use any provided context from the user's past conversations to give more personalized and relevant assistance.",
+                        system_instruction="""You are an Excel expert assistant with the ability to:
+1. Answer questions about Excel (conversational)
+2. Write formulas directly to the user's workbook (use write_excel_formulas tool)
+3. Execute Python code for data analysis and file generation (use execute_python_code tool)
+
+CRITICAL: When the user asks you to DO something (add, create, modify, calculate), you MUST use the appropriate tool. Do NOT just explain - EXECUTE!
+
+- For formulas in existing workbook → use write_excel_formulas tool
+- For generating new files or complex analysis → use execute_python_code tool
+- For questions and explanations → respond conversationally
+
+Use the provided context from past conversations to give personalized assistance.""",
                         response_mime_type="text/plain",
                         safety_settings=[
                             types.SafetySetting(
@@ -164,7 +373,7 @@ class GeminiService:
                                 threshold='BLOCK_ONLY_HIGH'
                             ),
                         ],
-                        tools=[CODE_EXECUTION_TOOL]
+                        tools=[CODE_EXECUTION_TOOL, FORMULA_WRITING_TOOL]
                     ),
                     history=None
                 )
@@ -176,16 +385,25 @@ class GeminiService:
 
             # Step 5: Check if AI wants to execute code
             function_call = None
-            if (response.candidates and 
-                len(response.candidates) > 0 and 
-                response.candidates[0].content and 
-                response.candidates[0].content.parts and 
-                len(response.candidates[0].content.parts) > 0 and
-                hasattr(response.candidates[0].content.parts[0], 'function_call') and 
-                response.candidates[0].content.parts[0].function_call):
-                function_call = response.candidates[0].content.parts[0].function_call
+            try:
+                if (response.candidates and 
+                    len(response.candidates) > 0 and 
+                    response.candidates[0].content and 
+                    response.candidates[0].content.parts and 
+                    len(response.candidates[0].content.parts) > 0 and
+                    hasattr(response.candidates[0].content.parts[0], 'function_call') and 
+                    response.candidates[0].content.parts[0].function_call):
+                    function_call = response.candidates[0].content.parts[0].function_call
+                    logger.info(f"🔧 Function call detected: {function_call.name if function_call else 'None'}")
+                else:
+                    logger.info(f"🔍 No function call detected - AI chose conversational response")
+            except Exception as e:
+                logger.error(f"❌ Error parsing response: {e}")
+                logger.error(f"Response structure: {response}")
+                function_call = None
 
             # Step 6: Handle function call (code execution)
+            logger.info(f"🔍 Function call name: {function_call.name if function_call else 'None'}")
             if function_call and function_call.name == "execute_python_code":
                 logger.info(f"🔧 AI requested code execution: {function_call.args['reason']}")
                 
@@ -296,7 +514,64 @@ class GeminiService:
                     }
                 }
             
-            # Step 7: Handle conversational response (no code execution)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            # Step 6b: Handle formula writing (Office.js execution)
+            elif function_call and function_call.name == "write_excel_formulas":
+                logger.info(f"🎯 ENTERING FORMULA WRITING HANDLER")
+                logger.info(f"📝 AI requested formula writing: {function_call.args['reason']}")
+                logger.info(f"📝 Function call args: {function_call.args}")
+                
+                # Return Office.js code to frontend for execution
+                ai_response = function_call.args.get('formula_description', f"I'll add formulas to your workbook: {function_call.args['reason']}")
+                
+                await self._append_messages(
+                    conversation_id,
+                    message,
+                    f"{ai_response}\n[Formulas to be written: {function_call.args['reason']}]"
+                )
+                
+                result = {
+                    "ai_response": ai_response,
+                    "conversation_id": conversation_id,
+                    "executed_code": False,  # Not Python execution
+                    "write_formulas": True,  # New flag!
+                    "office_js_code": function_call.args.get("office_js_code"),
+                    "formula_reason": function_call.args.get("reason"),
+                    "target_column": function_call.args.get("target_column"),
+                    "formula_description": function_call.args.get("formula_description"),
+                    "search_results": {
+                        "semantic_matches": len(hybrid_results.get('semantic_search_results', [])),
+                        "excel_functions": len(hybrid_results.get('finite_search_results', [])),
+                        "workbook_context": bool(hybrid_results.get('infinite_search_results', []))
+                    }
+                }
+                logger.info(f"🎯 RETURNING FORMULA WRITING RESULT: {result}")
+                return result
+            
+            # Step 7: Handle conversational response (no code execution or formula writing)
             else:
                 # Defensive check for response structure
                 if (response.candidates and
@@ -750,7 +1025,18 @@ class GeminiService:
             chat = self.client.chats.create(
                 model = "gemini-2.0-flash",
                 config = types.GenerateContentConfig(
-                    system_instruction = "You are an excel expert that can answer questions and help with tasks.",
+                    system_instruction="""You are an Excel expert assistant with the ability to:
+1. Answer questions about Excel (conversational)
+2. Write formulas directly to the user's workbook (use write_excel_formulas tool)
+3. Execute Python code for data analysis and file generation (use execute_python_code tool)
+
+CRITICAL: When the user asks you to DO something (add, create, modify, calculate), you MUST use the appropriate tool. Do NOT just explain - EXECUTE!
+
+- For formulas in existing workbook → use write_excel_formulas tool
+- For generating new files or complex analysis → use execute_python_code tool
+- For questions and explanations → respond conversationally
+
+Use the provided context from past conversations to give personalized assistance.""",
                     response_mime_type = "text/plain",
                     safety_settings= [
                         types.SafetySetting(
@@ -758,7 +1044,7 @@ class GeminiService:
                             threshold='BLOCK_ONLY_HIGH'
                         ),
                     ],
-                    tools=[CODE_EXECUTION_TOOL]  # ✅ Add tools for existing chats
+                    tools=[CODE_EXECUTION_TOOL, FORMULA_WRITING_TOOL]  # ✅ Add BOTH tools for existing chats
                 ),
                 history = history
             )

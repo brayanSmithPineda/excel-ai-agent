@@ -124,6 +124,13 @@ export interface ChatResponse {
     output_files?: Record<string, string>;  // filename -> base64
     execution_reason?: string;
     
+    // NEW: Formula writing fields (Office.js execution)
+    write_formulas?: boolean;
+    office_js_code?: string;
+    formula_reason?: string;
+    target_column?: string;
+    formula_description?: string;
+    
     // Permission request fields
     requires_permission?: boolean;
     risk_level?: string;
@@ -147,6 +154,14 @@ export async function sendChatMessage(
         throw new Error('Not authenticated')
     }
 
+    // Extract current workbook data
+    let workbookData = null;
+    try {
+        workbookData = await getCurrentWorkbookData();
+    } catch (error) {
+        console.warn("Could not extract workbook data:", error);
+    }
+
     const response = await makeAuthenticatedRequest(`${API_BASE_URL}/api/v1/chat/completion`, {
         method: 'POST',
         headers: {
@@ -155,6 +170,7 @@ export async function sendChatMessage(
         body: JSON.stringify({
             message,
             conversation_id: conversationId,
+            workbook_data: workbookData,
             enable_semantic_search: true,
             enable_excel_search: true,
             enable_hybrid_search: true
@@ -166,6 +182,68 @@ export async function sendChatMessage(
     }
 
     return await response.json()
+}
+
+//===========================================
+// WORKBOOK DATA EXTRACTION
+//===========================================
+/**
+ * Extract current workbook data for AI context
+ */
+async function getCurrentWorkbookData(): Promise<any> {
+    return new Promise((resolve, reject) => {
+        Excel.run(async (context) => {
+            try {
+                const workbook = context.workbook;
+                const worksheets = workbook.worksheets;
+                const worksheetsData = [];
+                
+                // Load all worksheets
+                worksheets.load("items");
+                await context.sync();
+                
+                // Get the currently active worksheet
+                const activeWorksheet = context.workbook.worksheets.getActiveWorksheet();
+                activeWorksheet.load("name");
+                await context.sync();
+                const activeTabName = activeWorksheet.name;
+                
+                // Extract data from each worksheet
+                for (const worksheet of worksheets.items) {
+                    const worksheetData: {
+                        name: string;
+                        data: any[];
+                        rowCount?: number;
+                        columnCount?: number;
+                    } = {
+                        name: worksheet.name,
+                        data: []
+                    };
+                    
+                    // Get used range
+                    const usedRange = worksheet.getUsedRange();
+                    usedRange.load("values,rowCount,columnCount");
+                    await context.sync();
+                    
+                    if (usedRange.values) {
+                        worksheetData.data = usedRange.values;
+                        worksheetData.rowCount = usedRange.rowCount;
+                        worksheetData.columnCount = usedRange.columnCount;
+                    }
+                    
+                    worksheetsData.push(worksheetData);
+                }
+                
+                resolve({
+                    worksheets: worksheetsData,
+                    activeTab: activeTabName,  // ✅ Add active tab context
+                    timestamp: new Date().toISOString()
+                });
+            } catch (error) {
+                reject(error);
+            }
+        });
+    });
 }
 
 //===========================================
